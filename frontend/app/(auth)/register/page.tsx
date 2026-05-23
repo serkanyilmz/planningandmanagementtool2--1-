@@ -26,6 +26,7 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     fullName: "",
+    username: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -40,9 +41,14 @@ export default function RegisterPage() {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+
+    if (!/^[A-Za-z0-9._-]{3,30}$/.test(formData.username)) {
+      setError("Username must be 3-30 characters and use only letters, numbers, dots, underscores, or hyphens")
+      return
+    }
 
     if (formData.password.length < 8) {
       setError("Password must be at least 8 characters")
@@ -66,10 +72,10 @@ export default function RegisterPage() {
 
     setLoading(true)
 
-    const result = register(formData.fullName, formData.email, formData.password)
+    const result = await register(formData.fullName, formData.username, formData.email, formData.password)
 
     if (result.success) {
-      router.push("/login")
+      router.push("/home")
     } else {
       setError(result.error || "Registration failed")
       setLoading(false)
@@ -131,6 +137,17 @@ export default function RegisterPage() {
                 value={formData.fullName}
                 onChange={handleInputChange}
                 required
+                sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="Username"
+                name="username"
+                value={formData.username}
+                onChange={handleInputChange}
+                required
+                helperText="3-30 characters: letters, numbers, dots, underscores, or hyphens"
+                error={formData.username.length > 0 && !/^[A-Za-z0-9._-]{3,30}$/.test(formData.username)}
                 sx={{ mb: 2 }}
               />
               <TextField

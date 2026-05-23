@@ -5,6 +5,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.Date;
 import javax.crypto.SecretKey;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,8 +39,17 @@ public class JwtUtils implements JwtTokenPort {
                 .compact();
     }
 
+    @Override
+    public long getExpirationMs() {
+        return expirationMs;
+    }
+
     public String extractUsername(String token) {
         return extractAllClaims(token).getSubject();
+    }
+
+    public Instant extractExpiration(String token) {
+        return extractAllClaims(token).getExpiration().toInstant();
     }
 
     public boolean validateToken(String token, UserDetails userDetails) {

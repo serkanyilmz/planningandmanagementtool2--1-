@@ -2,8 +2,13 @@ package com.ser.ps.infrastructure.adapters.web;
 
 import com.ser.ps.application.dto.AuthResponse;
 import com.ser.ps.application.dto.LoginRequest;
+import com.ser.ps.application.dto.LogoutResponse;
 import com.ser.ps.application.dto.RegisterRequest;
 import com.ser.ps.application.ports.in.AuthService;
+import com.ser.ps.infrastructure.security.JwtUtils;
+import com.ser.ps.infrastructure.security.TokenBlacklistService;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -16,9 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final JwtUtils jwtUtils;
+    private final TokenBlacklistService tokenBlacklistService;
 
-    public AuthController(AuthService authService) {
+    public AuthController(
+            AuthService authService,
+            JwtUtils jwtUtils,
+            TokenBlacklistService tokenBlacklistService
+    ) {
         this.authService = authService;
+        this.jwtUtils = jwtUtils;
+        this.tokenBlacklistService = tokenBlacklistService;
     }
 
     @PostMapping("/register")
@@ -30,5 +43,21 @@ public class AuthController {
     @PostMapping("/login")
     public AuthResponse login(@RequestBody LoginRequest request) {
         return authService.login(request);
+    }
+
+    @PostMapping("/logout")
+    public LogoutResponse logout(HttpServletRequest request) {
+        String token = extractBearerToken(request);
+        Instant expiresAt = jwtUtils.extractExpiration(token);
+        tokenBlacklistService.revoke(token, expiresAt);
+        return new LogoutResponse("Logged out successfully");
+    }
+
+    private String extractBearerToken(HttpServletRequest request) {
+        String header = request.getHeader("Authorization");
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new IllegalArgumentException("Bearer token is required");
+        }
+        return header.substring(7);
     }
 }

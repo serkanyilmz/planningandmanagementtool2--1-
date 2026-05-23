@@ -31,18 +31,21 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse register(RegisterRequest request) {
-        if (userRepositoryPort.existsByUsername(request.username())) {
+        RegisterRequest normalizedRequest = request.normalized();
+        validateRegistration(normalizedRequest);
+
+        if (userRepositoryPort.existsByUsername(normalizedRequest.username())) {
             throw new IllegalArgumentException("Username is already taken");
         }
-        if (userRepositoryPort.existsByEmail(request.email())) {
+        if (userRepositoryPort.existsByEmail(normalizedRequest.email())) {
             throw new IllegalArgumentException("Email is already taken");
         }
 
         User user = new User(
-                request.username(),
-                request.email(),
-                passwordEncoderPort.encode(request.password()),
-                request.fullName()
+                normalizedRequest.username(),
+                normalizedRequest.email(),
+                passwordEncoderPort.encode(normalizedRequest.password()),
+                normalizedRequest.fullName()
         );
 
         User savedUser = userRepositoryPort.save(user);
@@ -52,17 +55,42 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        credentialAuthenticationPort.authenticate(request.usernameOrEmail(), request.password());
+        LoginRequest normalizedRequest = request.normalized();
+        if (normalizedRequest.usernameOrEmail().isBlank() || normalizedRequest.password().isBlank()) {
+            throw new IllegalArgumentException("Username/email and password are required");
+        }
 
-        User user = userRepositoryPort.findByUsernameOrEmail(request.usernameOrEmail())
+        credentialAuthenticationPort.authenticate(normalizedRequest.usernameOrEmail(), normalizedRequest.password());
+
+        User user = userRepositoryPort.findByUsernameOrEmail(normalizedRequest.usernameOrEmail())
                 .orElseThrow(() -> new IllegalArgumentException("Invalid username/email or password"));
         String token = jwtTokenPort.generateToken(user.getUsername());
         return toAuthResponse(user, token);
     }
 
+    private void validateRegistration(RegisterRequest request) {
+        if (request.fullName().isBlank()) {
+            throw new IllegalArgumentException("Full name is required");
+        }
+        if (request.username().isBlank()) {
+            throw new IllegalArgumentException("Username is required");
+        }
+        if (!request.username().matches("^[A-Za-z0-9._-]{3,30}$")) {
+            throw new IllegalArgumentException("Username must be 3-30 characters and use only letters, numbers, dots, underscores, or hyphens");
+        }
+        if (request.email().isBlank() || !request.email().matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new IllegalArgumentException("A valid email is required");
+        }
+        if (request.password().length() < 8) {
+            throw new IllegalArgumentException("Password must be at least 8 characters");
+        }
+    }
+
     private AuthResponse toAuthResponse(User user, String token) {
         return new AuthResponse(
                 token,
+                "Bearer",
+                jwtTokenPort.getExpirationMs() / 1000,
                 user.getId(),
                 user.getUsername(),
                 user.getEmail(),
