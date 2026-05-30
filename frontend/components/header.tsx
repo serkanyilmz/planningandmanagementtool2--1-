@@ -109,15 +109,17 @@ export function Header() {
     setHexError("")
   }
 
-  const handleConfirmCreateBoard = () => {
+  const handleConfirmCreateBoard = async () => {
     if (newBoardName.trim()) {
-      const newBoard = createBoard(newBoardName.trim(), selectedColor, currentUser?.id || "")
+      const newBoard = await createBoard(newBoardName.trim(), selectedColor, currentUser?.id || "")
       setNewBoardDialogOpen(false)
       setNewBoardName("")
       setSelectedColor(BOARD_COLORS[0])
       setCustomHex("")
       setHexError("")
-      router.push(`/boards/${newBoard.id}`)
+      if (newBoard) {
+        router.push(`/boards/${newBoard.id}`)
+      }
     }
   }
 
