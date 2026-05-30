@@ -4,13 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="2e1a71f8-fe40-471b-99dd-fb5b81deb83a" name="Changes" comment="PS-5 init back">
-      <change afterPath="$PROJECT_DIR$/frontend/.idea/.gitignore" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/.idea/frontend.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/frontend/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-    </list>
+    <list default="true" id="2e1a71f8-fe40-471b-99dd-fb5b81deb83a" name="Changes" comment="PS-6 init login" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -55,7 +49,7 @@
     "Spring Boot.PsApplication.executor": "Run",
     "git-widget-placeholder": "main",
     "kotlin-language-version-configured": "true",
-    "last_opened_file_path": "C:/Users/serka/OneDrive/Masaüstü/planningandmanagementtool2 (1)/frontend",
+    "last_opened_file_path": "C:/Users/serka/OneDrive/Masaüstü/planningandmanagementtool2 (1)",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -65,7 +59,7 @@
     "project.structure.proportion": "0.15",
     "project.structure.side.proportion": "0.2",
     "settings.editor.selected.configurable": "preferences.keymap",
-    "ts.external.directory.path": "C:\\Users\\serka\\OneDrive\\Masaüstü\\planningandmanagementtool2 (1)\\frontend\\node_modules\\typescript\\lib",
+    "ts.external.directory.path": "C:\\Program Files\\JetBrains\\IntelliJ IDEA 2024.2.1\\plugins\\javascript-plugin\\jsLanguageServicesImpl\\external",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -121,6 +115,7 @@
       <updated>1779531458699</updated>
       <workItem from="1779531459945" duration="5766000" />
       <workItem from="1779549743409" duration="4297000" />
+      <workItem from="1779555688623" duration="1997000" />
     </task>
     <task id="LOCAL-00001" summary="PS-4 init project back and front">
       <option name="closed" value="true" />
@@ -138,7 +133,15 @@
       <option name="project" value="LOCAL" />
       <updated>1779554106784</updated>
     </task>
-    <option name="localTasksCounter" value="3" />
+    <task id="LOCAL-00003" summary="PS-6 init login">
+      <option name="closed" value="true" />
+      <created>1779557435806</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1779557435806</updated>
+    </task>
+    <option name="localTasksCounter" value="4" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -147,6 +150,7 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="PS-4 init project back and front" />
     <MESSAGE value="PS-5 init back" />
-    <option name="LAST_COMMIT_MESSAGE" value="PS-5 init back" />
+    <MESSAGE value="PS-6 init login" />
+    <option name="LAST_COMMIT_MESSAGE" value="PS-6 init login" />
   </component>
 </project>

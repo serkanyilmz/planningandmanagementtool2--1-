@@ -39,6 +39,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     deleteTask,
     moveTask,
     addMemberToBoard,
+    isLoading,
     boards,
   } = useBoards()
   const { users, getUserByEmail, currentUser } = useAuth()
@@ -161,7 +162,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     return { lists }
   }, [board, filters, currentUser])
 
-  const handleAddMember = () => {
+  const handleAddMember = async () => {
     setMemberError("")
     const user = getUserByEmail(memberEmail.trim())
     if (!user) {
@@ -172,7 +173,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
       setMemberError("User is already a member of this board")
       return
     }
-    addMemberToBoard(id, user.id)
+    await addMemberToBoard(id, user.id)
     setMemberEmail("")
     setAddMemberDialogOpen(false)
   }
@@ -198,7 +199,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
             }}
           >
             <Typography variant="h5" color="text.secondary">
-              Board not found
+              {isLoading ? "Loading board..." : "Board not found"}
             </Typography>
           </Box>
         </Box>

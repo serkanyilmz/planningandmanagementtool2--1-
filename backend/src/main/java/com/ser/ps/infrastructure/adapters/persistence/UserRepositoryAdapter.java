@@ -35,6 +35,11 @@ public class UserRepositoryAdapter implements UserRepositoryPort {
     }
 
     @Override
+    public Optional<User> findById(Long id) {
+        return jpaUserRepository.findById(id);
+    }
+
+    @Override
     public boolean existsByUsername(String username) {
         return jpaUserRepository.existsByUsername(username);
     }
