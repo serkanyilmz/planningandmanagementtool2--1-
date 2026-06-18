@@ -5,8 +5,6 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
-import jakarta.persistence.JoinTable;
-import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
@@ -37,13 +35,8 @@ public class Board extends BaseEntity {
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
 
-    @ManyToMany
-    @JoinTable(
-            name = "board_members",
-            joinColumns = @JoinColumn(name = "board_id"),
-            inverseJoinColumns = @JoinColumn(name = "user_id")
-    )
-    private Set<User> members = new HashSet<>();
+    @OneToMany(mappedBy = "board", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<BoardMember> boardMembers = new HashSet<>();
 
     @OneToMany(mappedBy = "board", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("position ASC")
@@ -58,10 +51,26 @@ public class Board extends BaseEntity {
         this.description = description;
         this.color = color;
         this.createdBy = createdBy;
-        this.members.add(createdBy);
+        addMember(createdBy, BoardRole.ADMIN);
     }
 
     public boolean isMember(User user) {
-        return members.stream().anyMatch(member -> member.getId().equals(user.getId()));
+        return boardMembers.stream().anyMatch(member -> member.getUser().getId().equals(user.getId()));
+    }
+
+    public boolean isAdmin(User user) {
+        return boardMembers.stream()
+                .anyMatch(member -> member.getUser().getId().equals(user.getId())
+                        && (member.getRole() == BoardRole.ADMIN || (member.getRole() == null && createdBy.getId().equals(user.getId()))));
+    }
+
+    public BoardMember addMember(User user, BoardRole role) {
+        BoardMember member = new BoardMember(this, user, role);
+        boardMembers.add(member);
+        return member;
+    }
+
+    public void removeMember(Long userId) {
+        boardMembers.removeIf(member -> member.getUser().getId().equals(userId));
     }
 }

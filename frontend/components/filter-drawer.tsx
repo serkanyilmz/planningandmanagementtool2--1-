@@ -22,6 +22,7 @@ import { useFilters } from "@/contexts/filter-context"
 import { useBoards } from "@/contexts/board-context"
 import { useMemo } from "react"
 import type { Label } from "@/types/kanban"
+import { usePathname } from "next/navigation"
 
 interface FilterDrawerProps {
   open: boolean
@@ -42,8 +43,14 @@ export function FilterDrawer({ open, onClose }: FilterDrawerProps) {
   } = useFilters()
 
   const { boards } = useBoards()
+  const pathname = usePathname()
 
-  const allLabels = useMemo(() => {
+  const labels = useMemo(() => {
+    const boardMatch = pathname.match(/^\/boards\/([^/]+)/)
+    if (boardMatch) {
+      return boards.find((board) => board.id === boardMatch[1])?.labels || []
+    }
+
     const labelMap = new Map<string, Label>()
     boards.forEach((board) => {
       board.labels.forEach((label) => {
@@ -53,7 +60,7 @@ export function FilterDrawer({ open, onClose }: FilterDrawerProps) {
       })
     })
     return Array.from(labelMap.values())
-  }, [boards])
+  }, [boards, pathname])
 
   const handleApplyFilters = () => {
     applyFilters()
@@ -134,7 +141,7 @@ export function FilterDrawer({ open, onClose }: FilterDrawerProps) {
           Filter by Labels
         </Typography>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 0.5, maxHeight: 200, overflow: "auto" }}>
-          {allLabels.map((label) => (
+          {labels.map((label) => (
             <FormControlLabel
               key={label.id}
               control={
@@ -159,7 +166,7 @@ export function FilterDrawer({ open, onClose }: FilterDrawerProps) {
               }
             />
           ))}
-          {allLabels.length === 0 && (
+          {labels.length === 0 && (
             <Typography variant="body2" color="text.secondary">
               No labels available
             </Typography>

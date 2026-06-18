@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/auth-context"
 import { BoardProvider } from "@/contexts/board-context"
 import { FilterProvider } from "@/contexts/filter-context"
 import { NotificationProvider } from "@/contexts/notification-context"
+import { AuthGuard } from "@/components/auth-guard"
 import "./globals.css"
 
 const _inter = Inter({ subsets: ["latin"] })
@@ -34,7 +35,9 @@ export default function RootLayout({
           <BoardProvider>
             <NotificationProvider>
               <FilterProvider>
-                <ThemeProvider>{children}</ThemeProvider>
+                <ThemeProvider>
+                  <AuthGuard>{children}</AuthGuard>
+                </ThemeProvider>
               </FilterProvider>
             </NotificationProvider>
           </BoardProvider>

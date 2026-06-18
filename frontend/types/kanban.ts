@@ -10,6 +10,21 @@ export interface Assignee {
   avatar: string
 }
 
+export interface BoardMember extends Assignee {
+  email: string
+  role: "admin" | "member"
+}
+
+export interface TaskAttachment {
+  id: string
+  fileId: string
+  fileName: string
+  contentType: string
+  sizeBytes: number
+  url: string
+  cover?: boolean
+}
+
 export interface Task {
   id: string
   title: string
@@ -19,6 +34,7 @@ export interface Task {
   dueDate: string
   assignees: Assignee[]
   reminderBefore?: "1_day" | "2_hours" | "1_hour" | "none"
+  attachments?: TaskAttachment[]
 }
 
 export interface List {

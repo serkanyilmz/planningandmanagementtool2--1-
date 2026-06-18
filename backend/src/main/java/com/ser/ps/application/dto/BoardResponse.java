@@ -8,6 +8,8 @@ public record BoardResponse(
         String description,
         String color,
         List<String> memberIds,
+        List<BoardMemberResponse> members,
+        String currentUserRole,
         BoardDataResponse data,
         List<LabelResponse> labels
 ) {
