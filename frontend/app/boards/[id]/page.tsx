@@ -3,6 +3,7 @@
 import { use, useState, useMemo, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
+import { BoardAiPanel } from "@/components/ai/board-ai-panel"
 import { KanbanBoard } from "@/components/kanban/kanban-board"
 import { BoardLabelsManager } from "@/components/kanban/board-labels-manager"
 import { EditBoardDialog } from "@/components/edit-board-dialog"
@@ -289,6 +290,13 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
             </Box>
           </Box>
 
+          <BoardAiPanel
+            boardId={id}
+            lists={board.data.lists}
+            boardLabels={board.labels}
+            onAddTask={(listId, task) => addTask(id, listId, task)}
+          />
+
           {/* Kanban Board - Pass board-specific labels */}
           <Box sx={{ flex: 1, overflow: "hidden" }}>
             <KanbanBoard
@@ -400,6 +408,4 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
         board={{ id: board.id, title: board.title, color: board.color }}
         onSave={handleSaveBoard}
       />
-    </Box>
-  )
-}
+    </
