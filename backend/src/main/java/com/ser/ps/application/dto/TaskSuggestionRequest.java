@@ -7,8 +7,13 @@ public record TaskSuggestionRequest(
         String description,
         String dueDate,
         String priority,
+        String boardId,
+        String boardKey,
+        String listId,
         String boardTitle,
         String listTitle,
+        String taskId,
+        String taskKey,
         List<String> availableLabels
 ) {
 }

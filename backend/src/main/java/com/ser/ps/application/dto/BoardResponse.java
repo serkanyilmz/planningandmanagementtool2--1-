@@ -4,6 +4,7 @@ import java.util.List;
 
 public record BoardResponse(
         String id,
+        String boardKey,
         String title,
         String description,
         String color,

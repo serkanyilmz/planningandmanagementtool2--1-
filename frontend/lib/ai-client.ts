@@ -5,8 +5,13 @@ export interface TaskSuggestionRequest {
   description: string
   dueDate: string
   priority: "high" | "medium" | "low"
+  boardId?: string
+  boardKey?: string
+  listId?: string
   boardTitle?: string
   listTitle?: string
+  taskId?: string
+  taskKey?: string
   availableLabels?: string[]
 }
 

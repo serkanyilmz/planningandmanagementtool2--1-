@@ -46,6 +46,8 @@ import { suggestTask, type TaskSuggestionResponse } from "@/lib/ai-client"
 interface ColumnProps {
     list: List
     boardId: string
+    boardKey?: string
+    boardTitle?: string
     boardMembers: Assignee[]
     boardLabels: Label[]
     onRename: (newTitle: string) => void
@@ -171,6 +173,8 @@ function TaskSuggestionDetails({ suggestion }: { suggestion: TaskSuggestionRespo
 export function Column({
                            list,
                            boardId,
+                           boardKey,
+                           boardTitle,
                            boardMembers,
                            boardLabels,
                            onRename,
@@ -274,6 +278,10 @@ export function Column({
                 description: newTaskDescription,
                 dueDate: dueDateString(newTaskDueDate),
                 priority: newTaskPriority,
+                boardId,
+                boardKey,
+                listId: list.id,
+                boardTitle,
                 listTitle: list.title,
                 availableLabels: boardLabels.map((label) => label.name),
             })
@@ -308,7 +316,13 @@ export function Column({
                 description: editedTaskDescription,
                 dueDate: dueDateString(editedTaskDueDate),
                 priority: editedTaskPriority,
+                boardId,
+                boardKey,
+                listId: list.id,
+                boardTitle,
                 listTitle: list.title,
+                taskId: selectedTask?.id,
+                taskKey: selectedTask?.taskKey,
                 availableLabels: boardLabels.map((label) => label.name),
             })
             setEditedTaskSuggestion(suggestion)
@@ -731,7 +745,7 @@ export function Column({
             </Dialog>
 
             <Dialog open={taskDetailsOpen} onClose={() => setTaskDetailsOpen(false)} maxWidth="sm" fullWidth>
-                <DialogTitle>Task Details</DialogTitle>
+                <DialogTitle>{selectedTask?.taskKey ? `Task Details - ${selectedTask.taskKey}` : "Task Details"}</DialogTitle>
                 <DialogContent>
                     <TextField
                         margin="dense"

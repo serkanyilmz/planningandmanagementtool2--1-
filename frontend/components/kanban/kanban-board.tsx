@@ -10,6 +10,8 @@ import type { BoardData, Task, Assignee, Label } from "@/types/kanban"
 
 interface KanbanBoardProps {
   boardId: string
+  boardKey?: string
+  boardTitle?: string
   boardData: BoardData
   boardMembers: Assignee[]
   boardLabels: Label[]
@@ -30,6 +32,8 @@ interface KanbanBoardProps {
 
 export function KanbanBoard({
   boardId,
+  boardKey,
+  boardTitle,
   boardData,
   boardMembers,
   boardLabels,
@@ -112,6 +116,8 @@ export function KanbanBoard({
             key={list.id}
             list={list}
             boardId={boardId}
+            boardKey={boardKey}
+            boardTitle={boardTitle}
             boardMembers={boardMembers}
             boardLabels={boardLabels}
             onRename={(newTitle) => onRenameList(list.id, newTitle)}

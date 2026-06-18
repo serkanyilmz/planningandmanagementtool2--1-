@@ -76,7 +76,12 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
       <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
           <DragIndicator sx={{ fontSize: 16, color: "text.disabled", mt: 0.5 }} />
-          <Box sx={{ flex: 1 }}>
+        <Box sx={{ flex: 1 }}>
+            {task.taskKey && (
+              <Typography variant="caption" sx={{ display: "block", color: "text.secondary", mb: 0.75 }}>
+                {task.taskKey}
+              </Typography>
+            )}
             {coverAttachment && (
               <Box
                 sx={{
@@ -93,7 +98,8 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
                     component="img"
                     src={coverSrc}
                     alt={coverAttachment.fileName}
-                    sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                    draggable={false}
+                    sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
                   />
                 )}
               </Box>

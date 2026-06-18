@@ -1,21 +1,35 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, TextField, Button, Typography, Box, IconButton, InputAdornment, Alert } from "@mui/material"
 import { Visibility, VisibilityOff, GridView, Warning } from "@mui/icons-material"
-import { useAuth } from "@/contexts/auth-context"
+import { PENDING_LOGIN_STORAGE_KEY, useAuth } from "@/contexts/auth-context"
 
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { login } = useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [usernameOrEmail, setUsernameOrEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  useEffect(() => {
+    const storedValue = localStorage.getItem(PENDING_LOGIN_STORAGE_KEY)
+    if (!storedValue) return
+    try {
+      const pendingLogin = JSON.parse(storedValue) as { usernameOrEmail?: string }
+      if (pendingLogin.usernameOrEmail) {
+        setUsernameOrEmail(pendingLogin.usernameOrEmail)
+      }
+    } catch {
+      // Ignore invalid local storage payloads.
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -25,6 +39,7 @@ export default function LoginPage() {
     const result = await login(usernameOrEmail, password)
 
     if (result.success) {
+      localStorage.removeItem(PENDING_LOGIN_STORAGE_KEY)
       router.push("/home")
     } else {
       setError(result.error || "Invalid credentials")
@@ -72,6 +87,12 @@ export default function LoginPage() {
             <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
               Enter your credentials to access your account
             </Typography>
+
+            {searchParams.get("registered") === "1" && !error && (
+              <Alert severity="success" sx={{ mb: 2 }}>
+                Registration completed. Sign in with the account you just created.
+              </Alert>
+            )}
 
             {error && (
               <Alert severity="error" icon={<Warning />} sx={{ mb: 2 }}>

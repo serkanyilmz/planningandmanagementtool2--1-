@@ -47,6 +47,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const USERS_STORAGE_KEY = "planify_users"
 const CURRENT_USER_STORAGE_KEY = "planify_current_user"
 const AUTH_TOKEN_STORAGE_KEY = "planify_auth_token"
+export const PENDING_LOGIN_STORAGE_KEY = "planify_pending_login"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
 function toUser(response: AuthResponse): User {
@@ -161,8 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const user = toUser(authResponse)
 
         setUsers((prev) => upsertUser(prev, user))
-        setCurrentUser(user)
-        setToken(authResponse.token)
         return { success: true }
       } catch {
         return { success: false, error: "Unable to connect to the authentication server" }
@@ -190,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUsers((prev) => upsertUser(prev, user))
         setCurrentUser(user)
         setToken(authResponse.token)
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(PENDING_LOGIN_STORAGE_KEY)
+        }
         return { success: true }
       } catch {
         return { success: false, error: "Unable to connect to the authentication server" }
@@ -202,19 +204,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = toUser(authResponse)
     setUsers((prev) => upsertUser(prev, user))
     setCurrentUser(user)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("planify:user-updated", { detail: user }))
+    }
     return user
   }, [])
 
   const refreshCurrentUser = useCallback(async () => {
     if (!token) return
-    const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!response.ok) {
-      logout()
-      return
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      if (response.status === 401 || response.status === 403) {
+        logout()
+        return
+      }
+      if (!response.ok) return
+      applyAuthResponseUser((await response.json()) as AuthResponse)
+    } catch {
+      // Keep the current session on transient network/server issues.
     }
-    applyAuthResponseUser((await response.json()) as AuthResponse)
   }, [token, applyAuthResponseUser, logout])
 
   useEffect(() => {
@@ -281,20 +292,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!file.type.startsWith("image/")) return { success: false, error: "Please choose an image file" }
       const formData = new FormData()
       formData.append("file", file)
+      const optimisticAvatarUrl = URL.createObjectURL(file)
       try {
         const response = await fetch(`${API_BASE_URL}/api/auth/me/avatar`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         })
-        if (!response.ok) return { success: false, error: await readError(response, "Avatar update failed") }
-        applyAuthResponseUser((await response.json()) as AuthResponse)
+        if (!response.ok) {
+          URL.revokeObjectURL(optimisticAvatarUrl)
+          return { success: false, error: await readError(response, "Avatar update failed") }
+        }
+        const authResponse = (await response.json()) as AuthResponse
+        const optimisticResponse = {
+          ...authResponse,
+          profileImageUrl: optimisticAvatarUrl,
+        }
+        applyAuthResponseUser(optimisticResponse)
         return { success: true }
       } catch {
+        URL.revokeObjectURL(optimisticAvatarUrl)
         return { success: false, error: "Unable to update profile picture" }
       }
     },
-    [token, applyAuthResponseUser],
+    [token, applyAuthResponseUser, refreshCurrentUser],
   )
 
   const getUserByEmail = useCallback(

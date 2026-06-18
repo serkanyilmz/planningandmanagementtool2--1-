@@ -12,12 +12,17 @@ export function useProtectedImage(url?: string, token?: string | null) {
       setSrc("")
       return
     }
+    if (url.startsWith("blob:") || url.startsWith("data:")) {
+      setSrc(url)
+      return
+    }
 
     let active = true
     let objectUrl = ""
     const absoluteUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`
+    setSrc("")
 
-    fetch(absoluteUrl, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(absoluteUrl, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" })
       .then((response) => (response.ok ? response.blob() : null))
       .then((blob) => {
         if (!active || !blob) return

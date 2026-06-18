@@ -108,6 +108,7 @@ public class AiSuggestionServiceImpl implements AiSuggestionService {
         List<String> checklist = checklistFor(suggestedTitle);
         String riskReason = riskReason(deadlineRisk, description);
         String suggestedReminder = "high".equals(deadlineRisk) || "overdue".equals(deadlineRisk) ? "1_hour" : "1_day";
+        String taskReference = taskReference(request);
 
         if (title.length() < 8) {
             suggestions.add("Use a clearer action-based title so teammates understand the task quickly.");
@@ -118,10 +119,13 @@ public class AiSuggestionServiceImpl implements AiSuggestionService {
         if (suggestions.isEmpty()) {
             suggestions.add("The task looks well scoped. Keep the priority and deadline as they are.");
         }
+        if (!taskReference.isBlank()) {
+            suggestions.add(0, "Reference " + taskReference + " when discussing this task with the team.");
+        }
 
         return new TaskSuggestionResponse(
                 suggestedTitle,
-                suggestedDescription,
+                taskReference.isBlank() ? suggestedDescription : suggestedDescription + "\n\nReference: " + taskReference,
                 suggestedPriority,
                 deadlineRisk,
                 Collections.emptyList(),
@@ -206,17 +210,17 @@ public class AiSuggestionServiceImpl implements AiSuggestionService {
         List<String> blockedTasks = tasks.stream()
                 .filter(task -> containsAny(task.task().title(), "block", "blocked", "stuck", "waiting")
                         || containsAny(task.task().description(), "block", "blocked", "stuck", "waiting"))
-                .map(task -> task.task().title())
+                .map(task -> taskLabel(task.task()) + " " + task.task().title())
                 .limit(5)
                 .toList();
         List<String> weakTasks = tasks.stream()
                 .filter(task -> task.task().description() == null || task.task().description().trim().length() < 25)
-                .map(task -> task.task().title())
+                .map(task -> taskLabel(task.task()) + " " + task.task().title())
                 .limit(5)
                 .toList();
         List<String> unassignedTasks = tasks.stream()
                 .filter(task -> task.task().assignees() == null || task.task().assignees().isEmpty())
-                .map(task -> task.task().title())
+                .map(task -> taskLabel(task.task()) + " " + task.task().title())
                 .limit(5)
                 .toList();
         int healthScore = Math.max(0, 100 - overdueTasks * 12 - highPriorityTasks * 4 - weakTasks.size() * 5 - unassignedTasks.size() * 3);
@@ -227,7 +231,7 @@ public class AiSuggestionServiceImpl implements AiSuggestionService {
                         .comparing((TaskWithList task) -> isOverdue(task.task()) ? 0 : 1)
                         .thenComparing(task -> dueDateOrMax(task.task().dueDate())))
                 .limit(5)
-                .map(task -> task.task().title() + " (" + task.listTitle() + ")")
+                .map(task -> taskLabel(task.task()) + " " + task.task().title() + " (" + task.listTitle() + ")")
                 .toList();
 
         List<String> risks = new ArrayList<>();
@@ -345,6 +349,31 @@ public class AiSuggestionServiceImpl implements AiSuggestionService {
             }
         }
         return false;
+    }
+
+    private String taskReference(TaskSuggestionRequest request) {
+        if (request.taskKey() != null && !request.taskKey().isBlank()) {
+            return request.taskKey().trim();
+        }
+        if (request.boardKey() != null && !request.boardKey().isBlank()
+                && request.taskId() != null && !request.taskId().isBlank()) {
+            return request.boardKey().trim() + "-TASK-" + request.taskId().trim();
+        }
+        if (request.taskId() != null && !request.taskId().isBlank()) {
+            return "TASK-" + request.taskId().trim();
+        }
+        if (request.boardKey() != null && !request.boardKey().isBlank()
+                && request.listId() != null && !request.listId().isBlank()) {
+            return request.boardKey().trim() + "-LIST-" + request.listId().trim();
+        }
+        return request.boardKey() == null ? "" : request.boardKey().trim();
+    }
+
+    private String taskLabel(TaskResponse task) {
+        if (task.taskKey() != null && !task.taskKey().isBlank()) {
+            return "[" + task.taskKey() + "]";
+        }
+        return "[TASK-" + task.id() + "]";
     }
 
     private record TaskWithList(String listTitle, TaskResponse task) {

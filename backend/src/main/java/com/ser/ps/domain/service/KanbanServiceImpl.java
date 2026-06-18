@@ -481,6 +481,7 @@ public class KanbanServiceImpl implements KanbanService {
 
         return new BoardResponse(
                 String.valueOf(board.getId()),
+                boardKey(board.getId()),
                 board.getTitle(),
                 board.getDescription(),
                 board.getColor(),
@@ -504,8 +505,12 @@ public class KanbanServiceImpl implements KanbanService {
     }
 
     private TaskResponse toResponse(Task task) {
+        Board board = task.getList().getBoard();
         return new TaskResponse(
                 String.valueOf(task.getId()),
+                taskKey(board.getId(), task.getId()),
+                String.valueOf(board.getId()),
+                boardKey(board.getId()),
                 task.getTitle(),
                 task.getDescription(),
                 task.getLabels().stream()
@@ -590,6 +595,14 @@ public class KanbanServiceImpl implements KanbanService {
 
     private String avatarUrl(User user) {
         return user.getProfileImage() == null ? "" : "/api/files/" + user.getProfileImage().getId();
+    }
+
+    private String boardKey(Long boardId) {
+        return "BOARD-" + boardId;
+    }
+
+    private String taskKey(Long boardId, Long taskId) {
+        return boardKey(boardId) + "-TASK-" + taskId;
     }
 
     private void normalizeListPositions(Board board) {

@@ -52,7 +52,7 @@ public class OpenAiKanbanProvider implements AiKanbanProvider {
     @Override
     public Optional<TaskSuggestionResponse> suggestTask(TaskSuggestionRequest request) {
         return requestStructured(
-                "Improve this Kanban task. Keep labels limited to availableLabels.",
+                "Improve this Kanban task. Keep labels limited to availableLabels. When board or task IDs are present, preserve and reference them naturally in the advice.",
                 request,
                 taskSuggestionSchema(),
                 TaskSuggestionResponse.class
@@ -62,7 +62,7 @@ public class OpenAiKanbanProvider implements AiKanbanProvider {
     @Override
     public Optional<BoardSummaryResponse> summarizeBoard(BoardResponse board) {
         return requestStructured(
-                "Summarize this Kanban board and produce practical daily focus advice.",
+                "Summarize this Kanban board and produce practical daily focus advice. Prefer referencing board and task IDs when useful.",
                 board,
                 boardSummarySchema(),
                 BoardSummaryResponse.class
@@ -82,7 +82,7 @@ public class OpenAiKanbanProvider implements AiKanbanProvider {
     @Override
     public Optional<BoardChatResponse> chat(BoardResponse board, BoardChatRequest request) {
         return requestStructured(
-                "Answer questions about this board. Do not claim to change data; suggest actions for the user to approve.",
+                "Answer questions about this board. Do not claim to change data; suggest actions for the user to approve. Prefer referencing task IDs from the payload when you mention tasks.",
                 Map.of("board", board, "request", request),
                 boardChatSchema(),
                 BoardChatResponse.class

@@ -1,6 +1,10 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
 async function readError(response: Response) {
+    if (response.status === 401 || response.status === 403) {
+        return "Your session has expired or is no longer valid. Please sign in again."
+    }
+
     let message = `Request failed with status ${response.status}`
     try {
         const body = (await response.json()) as { message?: string; error?: string }
@@ -24,9 +28,6 @@ export async function apiRequest<T>(path: string, token?: string | null, options
     })
 
     if (!response.ok) {
-        if (response.status === 401 && typeof window !== "undefined") {
-            window.dispatchEvent(new Event("planify:session-expired"))
-        }
         throw new Error(await readError(response))
     }
 

@@ -8,6 +8,7 @@ import { apiRequest } from "@/lib/api-client"
 
 export interface Board {
   id: string
+  boardKey?: string
   title: string
   description: string
   color: string
@@ -22,7 +23,7 @@ interface BoardContextType {
   boards: Board[]
   isLoading: boolean
   refreshBoards: () => Promise<void>
-  createBoard: (title: string, color: string, creatorId: string) => Promise<Board | null>
+  createBoard: (title: string, color: string) => Promise<Board | null>
   getBoard: (id: string) => Board | undefined
   updateBoard: (id: string, updates: Partial<Board>) => Promise<void>
   deleteBoard: (id: string) => Promise<void>
@@ -49,6 +50,34 @@ interface BoardContextType {
 
 const BoardContext = createContext<BoardContextType | undefined>(undefined)
 const WS_BASE_URL = (process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/ws").replace(/\/$/, "")
+
+function taskKey(boardId: string, taskId: string) {
+  return `BOARD-${boardId}-TASK-${taskId}`
+}
+
+function normalizeBoard(board: Board): Board {
+  const memberAvatarById = new Map((board.members || []).map((member) => [member.id, member.avatar || ""]))
+
+  return {
+    ...board,
+    boardKey: board.boardKey || `BOARD-${board.id}`,
+    data: {
+      lists: board.data.lists.map((list) => ({
+        ...list,
+        tasks: list.tasks.map((task) => ({
+          ...task,
+          boardId: task.boardId || board.id,
+          boardKey: task.boardKey || board.boardKey || `BOARD-${board.id}`,
+          taskKey: task.taskKey || taskKey(board.id, task.id),
+          assignees: task.assignees.map((assignee) => ({
+            ...assignee,
+            avatar: assignee.avatar || memberAvatarById.get(assignee.id) || "",
+          })),
+        })),
+      })),
+    },
+  }
+}
 
 function isBoard(value: unknown): value is Board {
   const board = value as Partial<Board> | null
@@ -86,12 +115,13 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       console.warn("Ignoring invalid board payload", updatedBoard)
       return
     }
+    const normalizedBoard = normalizeBoard(updatedBoard)
     setBoards((prev) => {
-      const exists = prev.some((board) => board.id === updatedBoard.id)
+      const exists = prev.some((board) => board.id === normalizedBoard.id)
       if (!exists) {
-        return [...prev, updatedBoard]
+        return [...prev, normalizedBoard]
       }
-      return prev.map((board) => (board.id === updatedBoard.id ? updatedBoard : board))
+      return prev.map((board) => (board.id === normalizedBoard.id ? normalizedBoard : board))
     })
   }, [])
 
@@ -104,11 +134,34 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       const loadedBoards = await apiRequest<Board[]>("/api/boards", token)
-      setBoards(loadedBoards.filter(isBoard))
+      setBoards(loadedBoards.filter(isBoard).map(normalizeBoard))
     } finally {
       setIsLoading(false)
     }
   }, [token])
+
+  useEffect(() => {
+    if (!currentUser) return
+    setBoards((prev) =>
+      prev.map((board) => ({
+        ...board,
+        members: board.members?.map((member) =>
+          member.id === currentUser.id ? { ...member, avatar: currentUser.profileImageUrl || member.avatar } : member,
+        ),
+        data: {
+          lists: board.data.lists.map((list) => ({
+            ...list,
+            tasks: list.tasks.map((task) => ({
+              ...task,
+              assignees: task.assignees.map((assignee) =>
+                assignee.id === currentUser.id ? { ...assignee, avatar: currentUser.profileImageUrl || assignee.avatar } : assignee,
+              ),
+            })),
+          })),
+        },
+      })),
+    )
+  }, [currentUser])
 
   useEffect(() => {
     void refreshBoards()

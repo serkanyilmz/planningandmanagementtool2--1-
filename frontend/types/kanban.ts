@@ -27,6 +27,9 @@ export interface TaskAttachment {
 
 export interface Task {
   id: string
+  taskKey?: string
+  boardId?: string
+  boardKey?: string
   title: string
   description?: string
   labels: Label[]

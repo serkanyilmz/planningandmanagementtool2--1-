@@ -18,7 +18,7 @@ import {
   Alert,
 } from "@mui/material"
 import { Visibility, VisibilityOff, GridView, Warning } from "@mui/icons-material"
-import { useAuth } from "@/contexts/auth-context"
+import { PENDING_LOGIN_STORAGE_KEY, useAuth } from "@/contexts/auth-context"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -75,7 +75,14 @@ export default function RegisterPage() {
     const result = await register(formData.fullName, formData.username, formData.email, formData.password)
 
     if (result.success) {
-      router.push("/home")
+      localStorage.setItem(
+        PENDING_LOGIN_STORAGE_KEY,
+        JSON.stringify({
+          usernameOrEmail: formData.username.trim() || formData.email.trim(),
+          email: formData.email.trim(),
+        }),
+      )
+      router.push("/login?registered=1")
     } else {
       setError(result.error || "Registration failed")
       setLoading(false)

@@ -26,7 +26,9 @@ import {
 export default function SettingsPage() {
   const router = useRouter()
   const { currentUser, token, updateAvatar, updateEmail, updatePassword } = useAuth()
-  const avatarPreview = useProtectedImage(currentUser?.profileImageUrl, token)
+  const remoteAvatarPreview = useProtectedImage(currentUser?.profileImageUrl, token)
+  const [avatarOverride, setAvatarOverride] = useState("")
+  const avatarPreview = avatarOverride || remoteAvatarPreview
   const [email, setEmail] = useState(currentUser?.email || "")
   const [emailPassword, setEmailPassword] = useState("")
   const [currentPassword, setCurrentPassword] = useState("")
@@ -63,6 +65,12 @@ export default function SettingsPage() {
       if (cropImageSrc) URL.revokeObjectURL(cropImageSrc)
     }
   }, [cropImageSrc])
+
+  useEffect(() => {
+    return () => {
+      if (avatarOverride) URL.revokeObjectURL(avatarOverride)
+    }
+  }, [avatarOverride])
 
   const showResult = (result: { success: boolean; error?: string }, successMessage: string) => {
     setError(result.error || "")
@@ -121,7 +129,19 @@ export default function SettingsPage() {
       return
     }
     const croppedFile = new File([blob], cropFileName.replace(/\.[^.]+$/, "") + "-cropped.jpg", { type: "image/jpeg" })
-    showResult(await updateAvatar(croppedFile), "Profile picture updated")
+    const optimisticPreview = URL.createObjectURL(croppedFile)
+    const previousPreview = avatarOverride
+    if (previousPreview) {
+      URL.revokeObjectURL(previousPreview)
+    }
+    setAvatarOverride(optimisticPreview)
+    const result = await updateAvatar(croppedFile)
+    showResult(result, "Profile picture updated")
+    if (!result.success) {
+      URL.revokeObjectURL(optimisticPreview)
+      setAvatarOverride("")
+      return
+    }
     setCropOpen(false)
   }
 

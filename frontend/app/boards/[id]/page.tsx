@@ -257,6 +257,11 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
                   {board.title}
                 </Typography>
+                {board.boardKey && (
+                  <Typography variant="caption" sx={{ color: "text.secondary", border: "1px solid", borderColor: "divider", px: 1, py: 0.25, borderRadius: 1 }}>
+                    {board.boardKey}
+                  </Typography>
+                )}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {board.description}
@@ -301,6 +306,8 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
           <Box sx={{ flex: 1, overflow: "hidden" }}>
             <KanbanBoard
               boardId={id}
+              boardKey={board.boardKey}
+              boardTitle={board.title}
               boardData={filteredBoardData || board.data}
               boardMembers={getBoardMembers()}
               boardLabels={board.labels}
@@ -402,10 +409,12 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
         </DialogActions>
       </Dialog>
 
-      <EditBoardDialog
+            <EditBoardDialog
         open={editBoardDialogOpen}
         onClose={() => setEditBoardDialogOpen(false)}
         board={{ id: board.id, title: board.title, color: board.color }}
         onSave={handleSaveBoard}
       />
-    </
+    </Box>
+  )
+}

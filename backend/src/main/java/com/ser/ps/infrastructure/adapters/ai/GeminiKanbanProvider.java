@@ -52,7 +52,7 @@ public class GeminiKanbanProvider implements AiKanbanProvider {
     @Override
     public Optional<TaskSuggestionResponse> suggestTask(TaskSuggestionRequest request) {
         return requestJson(
-                "Improve this Kanban task. Keep labels limited to availableLabels.",
+                "Improve this Kanban task. Keep labels limited to availableLabels. When board or task IDs are present, preserve and reference them naturally in the advice.",
                 request,
                 taskSuggestionShape(),
                 TaskSuggestionResponse.class
@@ -62,7 +62,7 @@ public class GeminiKanbanProvider implements AiKanbanProvider {
     @Override
     public Optional<BoardSummaryResponse> summarizeBoard(BoardResponse board) {
         return requestJson(
-                "Summarize this Kanban board and produce practical daily focus advice.",
+                "Summarize this Kanban board and produce practical daily focus advice. Prefer referencing board and task IDs when useful.",
                 board,
                 boardSummaryShape(),
                 BoardSummaryResponse.class
@@ -82,7 +82,7 @@ public class GeminiKanbanProvider implements AiKanbanProvider {
     @Override
     public Optional<BoardChatResponse> chat(BoardResponse board, BoardChatRequest request) {
         return requestJson(
-                "Answer questions about this board. Do not claim to change data; suggest actions for the user to approve.",
+                "Answer questions about this board. Do not claim to change data; suggest actions for the user to approve. Prefer referencing task IDs from the payload when you mention tasks.",
                 Map.of("board", board, "request", request),
                 boardChatShape(),
                 BoardChatResponse.class
