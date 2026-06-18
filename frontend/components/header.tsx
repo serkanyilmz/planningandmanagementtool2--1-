@@ -19,6 +19,7 @@ import {
   Typography,
   TextField,
   InputAdornment,
+  Alert,
 } from "@mui/material"
 import {
   Add as AddIcon,
@@ -66,6 +67,8 @@ export function Header() {
   const [selectedColor, setSelectedColor] = useState(BOARD_COLORS[0])
   const [customHex, setCustomHex] = useState("")
   const [hexError, setHexError] = useState("")
+  const [createBoardError, setCreateBoardError] = useState("")
+  const [isCreatingBoard, setIsCreatingBoard] = useState(false)
 
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false)
   const [notificationAnchorEl, setNotificationAnchorEl] = useState<null | HTMLElement>(null)
@@ -80,6 +83,7 @@ export function Header() {
 
   const handleCreateBoard = () => {
     handleMenuClose()
+    setCreateBoardError("")
     setNewBoardDialogOpen(true)
   }
 
@@ -110,16 +114,32 @@ export function Header() {
   }
 
   const handleConfirmCreateBoard = async () => {
-    if (newBoardName.trim()) {
-      const newBoard = await createBoard(newBoardName.trim(), selectedColor, currentUser?.id || "")
+    if (!newBoardName.trim()) return
+    if (!currentUser) {
+      setCreateBoardError("Your session is not ready yet. Please try again.")
+      return
+    }
+
+    setIsCreatingBoard(true)
+    setCreateBoardError("")
+
+    try {
+      const newBoard = await createBoard(newBoardName.trim(), selectedColor)
+      if (!newBoard) {
+        setCreateBoardError("Board could not be created. Please sign in again and retry.")
+        return
+      }
+
       setNewBoardDialogOpen(false)
       setNewBoardName("")
       setSelectedColor(BOARD_COLORS[0])
       setCustomHex("")
       setHexError("")
-      if (newBoard) {
-        router.push(`/boards/${newBoard.id}`)
-      }
+      router.push(`/boards/${newBoard.id}`)
+    } catch (error) {
+      setCreateBoardError(error instanceof Error ? error.message : "Board could not be created")
+    } finally {
+      setIsCreatingBoard(false)
     }
   }
 
@@ -230,9 +250,23 @@ export function Header() {
         </Toolbar>
       </AppBar>
 
-      <Dialog open={newBoardDialogOpen} onClose={() => setNewBoardDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={newBoardDialogOpen}
+        onClose={() => {
+          if (isCreatingBoard) return
+          setNewBoardDialogOpen(false)
+          setCreateBoardError("")
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>Create New Board</DialogTitle>
         <DialogContent>
+          {createBoardError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {createBoardError}
+            </Alert>
+          )}
           <TextField
             autoFocus
             margin="dense"
@@ -296,9 +330,17 @@ export function Header() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setNewBoardDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleConfirmCreateBoard} disabled={!newBoardName.trim()}>
-            Create
+          <Button
+            onClick={() => {
+              setNewBoardDialogOpen(false)
+              setCreateBoardError("")
+            }}
+            disabled={isCreatingBoard}
+          >
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleConfirmCreateBoard} disabled={!newBoardName.trim() || isCreatingBoard}>
+            {isCreatingBoard ? "Creating..." : "Create"}
           </Button>
         </DialogActions>
       </Dialog>

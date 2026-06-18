@@ -10,6 +10,8 @@ import type { BoardData, Task, Assignee, Label } from "@/types/kanban"
 
 interface KanbanBoardProps {
   boardId: string
+  boardKey?: string
+  boardTitle?: string
   boardData: BoardData
   boardMembers: Assignee[]
   boardLabels: Label[]
@@ -17,14 +19,21 @@ interface KanbanBoardProps {
   onRenameList: (listId: string, newTitle: string) => void
   onDeleteList: (listId: string) => void
   onClearListTasks: (listId: string) => void
-  onAddTask: (listId: string, task: Omit<Task, "id">) => void
+  onReorderLists: (listIds: string[]) => void
+  onAddTask: (listId: string, task: Omit<Task, "id">) => Promise<Task | null> | void
   onUpdateTask: (listId: string, taskId: string, updates: Partial<Task>) => void
   onDeleteTask: (listId: string, taskId: string) => void
   onMoveTask: (fromListId: string, toListId: string, taskId: string) => void
+  onAddTaskAttachment?: (taskId: string, file: File) => void
+  onSetTaskAttachmentCover?: (taskId: string, attachmentId: string) => void
+  onDeleteTaskAttachment?: (taskId: string, attachmentId: string) => void
+  canManageLists?: boolean
 }
 
 export function KanbanBoard({
   boardId,
+  boardKey,
+  boardTitle,
   boardData,
   boardMembers,
   boardLabels,
@@ -32,14 +41,20 @@ export function KanbanBoard({
   onRenameList,
   onDeleteList,
   onClearListTasks,
+  onReorderLists,
   onAddTask,
   onUpdateTask,
   onDeleteTask,
   onMoveTask,
+  onAddTaskAttachment,
+  onSetTaskAttachmentCover,
+  onDeleteTaskAttachment,
+  canManageLists = true,
 }: KanbanBoardProps) {
   const [addListDialogOpen, setAddListDialogOpen] = useState(false)
   const [newListName, setNewListName] = useState("")
   const [draggedTask, setDraggedTask] = useState<{ taskId: string; fromListId: string } | null>(null)
+  const [draggedListId, setDraggedListId] = useState<string | null>(null)
 
   const handleAddList = () => {
     setAddListDialogOpen(true)
@@ -71,6 +86,28 @@ export function KanbanBoard({
     setDraggedTask(null)
   }
 
+  const handleListDragStart = (e: React.DragEvent, listId: string) => {
+    if (!canManageLists) return
+    setDraggedListId(listId)
+    e.dataTransfer.effectAllowed = "move"
+  }
+
+  const handleListDrop = (e: React.DragEvent, toListId: string) => {
+    e.preventDefault()
+    if (!draggedListId || draggedListId === toListId) {
+      setDraggedListId(null)
+      return
+    }
+    const nextListIds = boardData.lists.map((list) => list.id)
+    const fromIndex = nextListIds.indexOf(draggedListId)
+    const toIndex = nextListIds.indexOf(toListId)
+    if (fromIndex === -1 || toIndex === -1) return
+    const [moved] = nextListIds.splice(fromIndex, 1)
+    nextListIds.splice(toIndex, 0, moved)
+    onReorderLists(nextListIds)
+    setDraggedListId(null)
+  }
+
   return (
     <>
       <Box sx={{ display: "flex", gap: 2, height: "100%", overflow: "auto", pb: 2 }}>
@@ -79,17 +116,25 @@ export function KanbanBoard({
             key={list.id}
             list={list}
             boardId={boardId}
+            boardKey={boardKey}
+            boardTitle={boardTitle}
             boardMembers={boardMembers}
             boardLabels={boardLabels}
             onRename={(newTitle) => onRenameList(list.id, newTitle)}
             onDelete={() => onDeleteList(list.id)}
             onClearTasks={() => onClearListTasks(list.id)}
+            onListDragStart={(e) => handleListDragStart(e, list.id)}
+            onListDrop={(e) => handleListDrop(e, list.id)}
             onAddTask={(task) => onAddTask(list.id, task)}
             onUpdateTask={(taskId, updates) => onUpdateTask(list.id, taskId, updates)}
             onDeleteTask={(taskId) => onDeleteTask(list.id, taskId)}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
             onTaskDragStart={handleTaskDragStart}
+            canManageLists={canManageLists}
+            onAddTaskAttachment={onAddTaskAttachment}
+            onSetTaskAttachmentCover={onSetTaskAttachmentCover}
+            onDeleteTaskAttachment={onDeleteTaskAttachment}
           />
         ))}
 

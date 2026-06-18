@@ -11,14 +11,21 @@ interface JpaTaskRepository extends JpaRepository<Task, Long> {
     @EntityGraph(attributePaths = {
             "list",
             "list.board",
-            "list.board.members",
+            "list.board.boardMembers",
+            "list.board.boardMembers.user",
+            "list.board.boardMembers.user.profileImage",
             "list.board.labels",
             "list.board.lists",
             "list.board.lists.tasks",
             "list.board.lists.tasks.labels",
             "list.board.lists.tasks.assignees",
+            "list.board.lists.tasks.assignees.profileImage",
+            "list.board.lists.tasks.attachments",
+            "list.board.lists.tasks.attachments.storedFile",
             "labels",
-            "assignees"
+            "assignees",
+            "attachments",
+            "attachments.storedFile"
     })
     Optional<Task> findById(Long id);
 }

@@ -5,6 +5,8 @@ import type React from "react"
 import { Card, CardContent, Chip, Typography, Avatar, AvatarGroup, Box } from "@mui/material"
 import { ArrowUpward, ArrowForward, ArrowDownward, CalendarToday, DragIndicator } from "@mui/icons-material"
 import type { Task } from "@/types/kanban"
+import { useAuth } from "@/contexts/auth-context"
+import { useProtectedImage } from "@/hooks/use-protected-image"
 
 interface TaskCardProps {
   task: Task
@@ -29,9 +31,25 @@ const priorityConfig = {
   },
 }
 
+function AssigneeAvatar({ assignee, token }: { assignee: Task["assignees"][number]; token: string | null }) {
+  const src = useProtectedImage(assignee.avatar, token)
+
+  return (
+    <Avatar key={assignee.id} alt={assignee.name} src={src || undefined} sx={{ bgcolor: "primary.main" }}>
+      {assignee.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")}
+    </Avatar>
+  )
+}
+
 export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
+  const { token } = useAuth()
   const PriorityIcon = priorityConfig[task.priority].icon
   const priorityColor = priorityConfig[task.priority].color
+  const coverAttachment = task.attachments?.find((attachment) => attachment.cover) || task.attachments?.[0]
+  const coverSrc = useProtectedImage(coverAttachment?.url, token)
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -58,7 +76,35 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
       <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
         <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1 }}>
           <DragIndicator sx={{ fontSize: 16, color: "text.disabled", mt: 0.5 }} />
-          <Box sx={{ flex: 1 }}>
+        <Box sx={{ flex: 1 }}>
+            {task.taskKey && (
+              <Typography variant="caption" sx={{ display: "block", color: "text.secondary", mb: 0.75 }}>
+                {task.taskKey}
+              </Typography>
+            )}
+            {coverAttachment && (
+              <Box
+                sx={{
+                  width: "100%",
+                  aspectRatio: "16 / 9",
+                  borderRadius: 1,
+                  overflow: "hidden",
+                  bgcolor: "action.hover",
+                  mb: 1.5,
+                }}
+              >
+                {coverSrc && (
+                  <Box
+                    component="img"
+                    src={coverSrc}
+                    alt={coverAttachment.fileName}
+                    draggable={false}
+                    sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }}
+                  />
+                )}
+              </Box>
+            )}
+
             {/* Labels */}
             {task.labels.length > 0 && (
               <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mb: 1.5 }}>
@@ -101,17 +147,7 @@ export function TaskCard({ task, onClick, onDragStart, onDragEnd, isDragging }: 
               {task.assignees.length > 0 && (
                 <AvatarGroup max={3} sx={{ "& .MuiAvatar-root": { width: 24, height: 24, fontSize: 10 } }}>
                   {task.assignees.map((assignee) => (
-                    <Avatar
-                      key={assignee.id}
-                      alt={assignee.name}
-                      src={assignee.avatar || "/placeholder.svg"}
-                      sx={{ bgcolor: "primary.main" }}
-                    >
-                      {assignee.name
-                        .split(" ")
-                        .map((n) => n[0])
-                        .join("")}
-                    </Avatar>
+                    <AssigneeAvatar key={assignee.id} assignee={assignee} token={token} />
                   ))}
                 </AvatarGroup>
               )}

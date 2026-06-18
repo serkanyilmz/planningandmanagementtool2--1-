@@ -4,10 +4,13 @@ import java.util.List;
 
 public record BoardResponse(
         String id,
+        String boardKey,
         String title,
         String description,
         String color,
         List<String> memberIds,
+        List<BoardMemberResponse> members,
+        String currentUserRole,
         BoardDataResponse data,
         List<LabelResponse> labels
 ) {

@@ -12,25 +12,35 @@ interface JpaBoardRepository extends JpaRepository<Board, Long> {
 
     @EntityGraph(attributePaths = {
             "createdBy",
-            "members",
+            "boardMembers",
+            "boardMembers.user",
+            "boardMembers.user.profileImage",
             "labels",
             "lists",
             "lists.tasks",
             "lists.tasks.labels",
-            "lists.tasks.assignees"
+            "lists.tasks.assignees",
+            "lists.tasks.assignees.profileImage",
+            "lists.tasks.attachments",
+            "lists.tasks.attachments.storedFile"
     })
-    @Query("select distinct b from Board b join b.members m where m.id = :userId")
+    @Query("select distinct b from Board b join b.boardMembers bm where bm.user.id = :userId")
     List<Board> findAllForMember(@Param("userId") Long userId);
 
     @Override
     @EntityGraph(attributePaths = {
             "createdBy",
-            "members",
+            "boardMembers",
+            "boardMembers.user",
+            "boardMembers.user.profileImage",
             "labels",
             "lists",
             "lists.tasks",
             "lists.tasks.labels",
-            "lists.tasks.assignees"
+            "lists.tasks.assignees",
+            "lists.tasks.assignees.profileImage",
+            "lists.tasks.attachments",
+            "lists.tasks.attachments.storedFile"
     })
     Optional<Board> findById(Long id);
 }

@@ -7,6 +7,8 @@ public record AuthResponse(
         Long userId,
         String username,
         String email,
-        String fullName
+        String fullName,
+        String profileImageFileId,
+        String profileImageUrl
 ) {
 }

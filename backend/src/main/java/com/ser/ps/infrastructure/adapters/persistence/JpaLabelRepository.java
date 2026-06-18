@@ -10,12 +10,15 @@ interface JpaLabelRepository extends JpaRepository<Label, Long> {
     @Override
     @EntityGraph(attributePaths = {
             "board",
-            "board.members",
+            "board.boardMembers",
+            "board.boardMembers.user",
             "board.labels",
             "board.lists",
             "board.lists.tasks",
             "board.lists.tasks.labels",
-            "board.lists.tasks.assignees"
+            "board.lists.tasks.assignees",
+            "board.lists.tasks.attachments",
+            "board.lists.tasks.attachments.storedFile"
     })
     Optional<Label> findById(Long id);
 }

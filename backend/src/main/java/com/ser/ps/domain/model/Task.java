@@ -9,7 +9,10 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.JoinTable;
 import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
+import jakarta.persistence.CascadeType;
 import java.time.LocalDate;
 import java.util.HashSet;
 import java.util.Set;
@@ -63,6 +66,10 @@ public class Task extends BaseEntity {
             inverseJoinColumns = @JoinColumn(name = "user_id")
     )
     private Set<User> assignees = new HashSet<>();
+
+    @OneToMany(mappedBy = "task", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("createdAt ASC")
+    private Set<TaskAttachment> attachments = new HashSet<>();
 
     public Task(String title, String description, TaskPriority priority, LocalDate dueDate, ReminderBefore reminderBefore, int position, KanbanList list) {
         this.title = title;

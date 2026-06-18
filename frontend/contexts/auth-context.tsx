@@ -8,15 +8,22 @@ export interface User {
   name: string
   email: string
   fullName: string
+  profileImageFileId?: string
+  profileImageUrl?: string
 }
 
 interface AuthContextType {
   users: User[]
   currentUser: User | null
   token: string | null
+  isHydrated: boolean
   register: (fullName: string, username: string, email: string, password: string) => Promise<AuthResult>
   login: (usernameOrEmail: string, password: string) => Promise<AuthResult>
   logout: () => void
+  refreshCurrentUser: () => Promise<void>
+  updateEmail: (currentPassword: string, email: string) => Promise<AuthResult>
+  updatePassword: (currentPassword: string, newPassword: string) => Promise<AuthResult>
+  updateAvatar: (file: File) => Promise<AuthResult>
   getUserByEmail: (email: string) => User | undefined
 }
 
@@ -31,6 +38,8 @@ interface AuthResponse {
   username: string
   email: string
   fullName: string
+  profileImageFileId?: string
+  profileImageUrl?: string
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -38,6 +47,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 const USERS_STORAGE_KEY = "planify_users"
 const CURRENT_USER_STORAGE_KEY = "planify_current_user"
 const AUTH_TOKEN_STORAGE_KEY = "planify_auth_token"
+export const PENDING_LOGIN_STORAGE_KEY = "planify_pending_login"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
 function toUser(response: AuthResponse): User {
@@ -47,6 +57,8 @@ function toUser(response: AuthResponse): User {
     name: response.fullName,
     fullName: response.fullName,
     email: response.email,
+    profileImageFileId: response.profileImageFileId || "",
+    profileImageUrl: response.profileImageUrl || "",
   }
 }
 
@@ -83,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedUsers) {
       setUsers(JSON.parse(storedUsers))
     }
-    if (storedCurrentUser) {
+    if (storedCurrentUser && storedToken) {
       setCurrentUser(JSON.parse(storedCurrentUser))
     }
     if (storedToken) {
@@ -91,6 +103,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     setIsHydrated(true)
   }, [])
+
+  const logout = useCallback(() => {
+    setCurrentUser(null)
+    setToken(null)
+  }, [])
+
+  useEffect(() => {
+    const handleSessionExpired = () => logout()
+    window.addEventListener("planify:session-expired", handleSessionExpired)
+    return () => window.removeEventListener("planify:session-expired", handleSessionExpired)
+  }, [logout])
 
   useEffect(() => {
     if (isHydrated) {
@@ -139,8 +162,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const user = toUser(authResponse)
 
         setUsers((prev) => upsertUser(prev, user))
-        setCurrentUser(user)
-        setToken(authResponse.token)
         return { success: true }
       } catch {
         return { success: false, error: "Unable to connect to the authentication server" }
@@ -168,6 +189,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUsers((prev) => upsertUser(prev, user))
         setCurrentUser(user)
         setToken(authResponse.token)
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(PENDING_LOGIN_STORAGE_KEY)
+        }
         return { success: true }
       } catch {
         return { success: false, error: "Unable to connect to the authentication server" }
@@ -176,10 +200,123 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  const logout = useCallback(() => {
-    setCurrentUser(null)
-    setToken(null)
+  const applyAuthResponseUser = useCallback((authResponse: AuthResponse) => {
+    const user = toUser(authResponse)
+    setUsers((prev) => upsertUser(prev, user))
+    setCurrentUser(user)
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("planify:user-updated", { detail: user }))
+    }
+    return user
   }, [])
+
+  const refreshCurrentUser = useCallback(async () => {
+    if (!token) return
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      })
+      if (response.status === 401 || response.status === 403) {
+        logout()
+        return
+      }
+      if (!response.ok) return
+      applyAuthResponseUser((await response.json()) as AuthResponse)
+    } catch {
+      // Keep the current session on transient network/server issues.
+    }
+  }, [token, applyAuthResponseUser, logout])
+
+  useEffect(() => {
+    if (!isHydrated || !token) return
+    void refreshCurrentUser()
+  }, [isHydrated, token, refreshCurrentUser])
+
+  useEffect(() => {
+    if (!isHydrated || !token) return
+
+    const validate = () => {
+      void refreshCurrentUser()
+    }
+    const interval = window.setInterval(validate, 60_000)
+    window.addEventListener("focus", validate)
+
+    return () => {
+      window.clearInterval(interval)
+      window.removeEventListener("focus", validate)
+    }
+  }, [isHydrated, refreshCurrentUser, token])
+
+  const updateEmail = useCallback(
+    async (currentPassword: string, email: string) => {
+      if (!token) return { success: false, error: "Not signed in" }
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me/email`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ currentPassword, email }),
+        })
+        if (!response.ok) return { success: false, error: await readError(response, "Email update failed") }
+        applyAuthResponseUser((await response.json()) as AuthResponse)
+        return { success: true }
+      } catch {
+        return { success: false, error: "Unable to update email" }
+      }
+    },
+    [token, applyAuthResponseUser],
+  )
+
+  const updatePassword = useCallback(
+    async (currentPassword: string, newPassword: string) => {
+      if (!token) return { success: false, error: "Not signed in" }
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me/password`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        })
+        if (!response.ok) return { success: false, error: await readError(response, "Password update failed") }
+        applyAuthResponseUser((await response.json()) as AuthResponse)
+        return { success: true }
+      } catch {
+        return { success: false, error: "Unable to update password" }
+      }
+    },
+    [token, applyAuthResponseUser],
+  )
+
+  const updateAvatar = useCallback(
+    async (file: File) => {
+      if (!token) return { success: false, error: "Not signed in" }
+      if (!file.type.startsWith("image/")) return { success: false, error: "Please choose an image file" }
+      const formData = new FormData()
+      formData.append("file", file)
+      const optimisticAvatarUrl = URL.createObjectURL(file)
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/me/avatar`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        })
+        if (!response.ok) {
+          URL.revokeObjectURL(optimisticAvatarUrl)
+          return { success: false, error: await readError(response, "Avatar update failed") }
+        }
+        const authResponse = (await response.json()) as AuthResponse
+        const optimisticResponse = {
+          ...authResponse,
+          profileImageUrl: optimisticAvatarUrl,
+        }
+        applyAuthResponseUser(optimisticResponse)
+        return { success: true }
+      } catch {
+        URL.revokeObjectURL(optimisticAvatarUrl)
+        return { success: false, error: "Unable to update profile picture" }
+      }
+    },
+    [token, applyAuthResponseUser, refreshCurrentUser],
+  )
 
   const getUserByEmail = useCallback(
     (email: string) => {
@@ -189,7 +326,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   return (
-    <AuthContext.Provider value={{ users, currentUser, token, register, login, logout, getUserByEmail }}>
+    <AuthContext.Provider
+      value={{
+        users,
+        currentUser,
+        token,
+        isHydrated,
+        register,
+        login,
+        logout,
+        refreshCurrentUser,
+        updateEmail,
+        updatePassword,
+        updateAvatar,
+        getUserByEmail,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )

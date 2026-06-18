@@ -3,6 +3,7 @@
 import { use, useState, useMemo, useEffect } from "react"
 import { Sidebar } from "@/components/sidebar"
 import { Header } from "@/components/header"
+import { BoardAiPanel } from "@/components/ai/board-ai-panel"
 import { KanbanBoard } from "@/components/kanban/kanban-board"
 import { BoardLabelsManager } from "@/components/kanban/board-labels-manager"
 import { EditBoardDialog } from "@/components/edit-board-dialog"
@@ -17,8 +18,12 @@ import {
   TextField,
   Button,
   Tooltip,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from "@mui/material"
-import { PersonAdd, Label as LabelIcon, Settings as SettingsIcon } from "@mui/icons-material"
+import { PersonAdd, Label as LabelIcon, Settings as SettingsIcon, Group as GroupIcon } from "@mui/icons-material"
 import { useBoards } from "@/contexts/board-context"
 import { useAuth } from "@/contexts/auth-context"
 import { useFilters } from "@/contexts/filter-context"
@@ -34,16 +39,22 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     renameList,
     deleteList,
     clearListTasks,
+    reorderLists,
     addTask,
     updateTask,
     deleteTask,
     moveTask,
+    addTaskAttachment,
+    setTaskAttachmentCover,
+    deleteTaskAttachment,
     addMemberToBoard,
+    updateBoardMemberRole,
+    removeMemberFromBoard,
+    refreshBoards,
     isLoading,
-    boards,
   } = useBoards()
   const { users, getUserByEmail, currentUser } = useAuth()
-  const { filters } = useFilters()
+  const { filters, setPendingSelectedLabelIds, applyFilters } = useFilters()
   const { addNotification } = useNotifications()
 
   const [addMemberDialogOpen, setAddMemberDialogOpen] = useState(false)
@@ -51,8 +62,17 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
   const [memberError, setMemberError] = useState("")
   const [labelsDialogOpen, setLabelsDialogOpen] = useState(false)
   const [editBoardDialogOpen, setEditBoardDialogOpen] = useState(false)
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false)
+  const [missingBoardRefreshId, setMissingBoardRefreshId] = useState<string | null>(null)
 
   const board = getBoard(id)
+  const isAdmin = board?.currentUserRole === "admin"
+
+  useEffect(() => {
+    if (board || isLoading || missingBoardRefreshId === id) return
+    setMissingBoardRefreshId(id)
+    void refreshBoards()
+  }, [board, id, isLoading, missingBoardRefreshId, refreshBoards])
 
   useEffect(() => {
     if (!board || !currentUser) return
@@ -108,21 +128,25 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
     return () => clearInterval(interval)
   }, [board, currentUser, id, addNotification])
 
+  useEffect(() => {
+    if (!board) return
+    const boardLabelIds = new Set(board.labels.map((label) => label.id))
+    const validSelectedIds = filters.selectedLabelIds.filter((labelId) => boardLabelIds.has(labelId))
+    if (validSelectedIds.length !== filters.selectedLabelIds.length) {
+      setPendingSelectedLabelIds(validSelectedIds)
+      applyFilters()
+    }
+  }, [board, filters.selectedLabelIds, setPendingSelectedLabelIds, applyFilters])
+
   const getBoardMembers = (): Assignee[] => {
     if (!board) return []
+    if (board.members?.length) {
+      return board.members.map((member) => ({ id: member.id, name: member.name, avatar: member.avatar }))
+    }
     return board.memberIds
-      .map((memberId) => {
-        const user = users.find((u) => u.id === memberId)
-        if (user) {
-          return {
-            id: user.id,
-            name: user.name,
-            avatar: "",
-          }
-        }
-        return null
-      })
-      .filter((m): m is Assignee => m !== null)
+      .map((memberId) => users.find((u) => u.id === memberId))
+      .filter((user): user is NonNullable<typeof user> => Boolean(user))
+      .map((user) => ({ id: user.id, name: user.name, avatar: user.profileImageUrl || "" }))
   }
 
   const filteredBoardData = useMemo((): BoardData | null => {
@@ -199,7 +223,7 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
             }}
           >
             <Typography variant="h5" color="text.secondary">
-              {isLoading ? "Loading board..." : "Board not found"}
+              {isLoading || missingBoardRefreshId === id ? "Loading board..." : "Board not found"}
             </Typography>
           </Box>
         </Box>
@@ -233,34 +257,57 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
                 <Typography variant="h5" sx={{ fontWeight: 700 }}>
                   {board.title}
                 </Typography>
+                {board.boardKey && (
+                  <Typography variant="caption" sx={{ color: "text.secondary", border: "1px solid", borderColor: "divider", px: 1, py: 0.25, borderRadius: 1 }}>
+                    {board.boardKey}
+                  </Typography>
+                )}
               </Box>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                 {board.description}
               </Typography>
             </Box>
             <Box sx={{ display: "flex", gap: 1 }}>
-              <Tooltip title="Board Settings">
-                <IconButton onClick={() => setEditBoardDialogOpen(true)}>
-                  <SettingsIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Manage Labels">
-                <IconButton onClick={() => setLabelsDialogOpen(true)}>
-                  <LabelIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Add Member">
-                <IconButton onClick={() => setAddMemberDialogOpen(true)}>
-                  <PersonAdd />
-                </IconButton>
-              </Tooltip>
+              {isAdmin && (
+                <>
+                  <Tooltip title="Board Settings">
+                    <IconButton onClick={() => setEditBoardDialogOpen(true)}>
+                      <SettingsIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Manage Labels">
+                    <IconButton onClick={() => setLabelsDialogOpen(true)}>
+                      <LabelIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Members">
+                    <IconButton onClick={() => setMembersDialogOpen(true)}>
+                      <GroupIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Add Member">
+                    <IconButton onClick={() => setAddMemberDialogOpen(true)}>
+                      <PersonAdd />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
             </Box>
           </Box>
+
+          <BoardAiPanel
+            boardId={id}
+            lists={board.data.lists}
+            boardLabels={board.labels}
+            onAddTask={(listId, task) => addTask(id, listId, task)}
+          />
 
           {/* Kanban Board - Pass board-specific labels */}
           <Box sx={{ flex: 1, overflow: "hidden" }}>
             <KanbanBoard
               boardId={id}
+              boardKey={board.boardKey}
+              boardTitle={board.title}
               boardData={filteredBoardData || board.data}
               boardMembers={getBoardMembers()}
               boardLabels={board.labels}
@@ -268,10 +315,15 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
               onRenameList={(listId, newTitle) => renameList(id, listId, newTitle)}
               onDeleteList={(listId) => deleteList(id, listId)}
               onClearListTasks={(listId) => clearListTasks(id, listId)}
+              onReorderLists={(listIds) => reorderLists(id, listIds)}
               onAddTask={(listId, task) => addTask(id, listId, task)}
               onUpdateTask={(listId, taskId, updates) => updateTask(id, listId, taskId, updates)}
               onDeleteTask={(listId, taskId) => deleteTask(id, listId, taskId)}
               onMoveTask={(fromListId, toListId, taskId) => moveTask(id, fromListId, toListId, taskId)}
+              onAddTaskAttachment={(taskId, file) => addTaskAttachment(id, taskId, file)}
+              onSetTaskAttachmentCover={(taskId, attachmentId) => setTaskAttachmentCover(id, taskId, attachmentId)}
+              onDeleteTaskAttachment={(taskId, attachmentId) => deleteTaskAttachment(id, taskId, attachmentId)}
+              canManageLists={isAdmin}
             />
           </Box>
         </Box>
@@ -309,7 +361,55 @@ export default function BoardPage({ params }: { params: Promise<{ id: string }> 
         labels={board.labels}
       />
 
-      <EditBoardDialog
+      <Dialog open={membersDialogOpen} onClose={() => setMembersDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Board Members</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 1.5, mt: 1 }}>
+            {(board.members || []).map((member) => (
+              <Box
+                key={member.id}
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 2,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  borderRadius: 1,
+                  p: 1.5,
+                }}
+              >
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {member.name}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {member.email}
+                  </Typography>
+                </Box>
+                <FormControl size="small" sx={{ minWidth: 120 }}>
+                  <InputLabel>Role</InputLabel>
+                  <Select
+                    label="Role"
+                    value={member.role}
+                    onChange={(event) => updateBoardMemberRole(id, member.id, event.target.value as "admin" | "member")}
+                  >
+                    <MenuItem value="admin">Admin</MenuItem>
+                    <MenuItem value="member">Member</MenuItem>
+                  </Select>
+                </FormControl>
+                <Button color="error" onClick={() => removeMemberFromBoard(id, member.id)}>
+                  Remove
+                </Button>
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMembersDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+            <EditBoardDialog
         open={editBoardDialogOpen}
         onClose={() => setEditBoardDialogOpen(false)}
         board={{ id: board.id, title: board.title, color: board.color }}
