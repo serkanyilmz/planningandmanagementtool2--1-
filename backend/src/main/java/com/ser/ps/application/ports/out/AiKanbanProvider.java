@@ -1,4 +1,4 @@
-package com.ser.ps.application.ports.in;
+package com.ser.ps.application.ports.out;
 
 import com.ser.ps.application.dto.BoardChatRequest;
 import com.ser.ps.application.dto.BoardChatResponse;
@@ -8,14 +8,15 @@ import com.ser.ps.application.dto.SmartTaskDraftRequest;
 import com.ser.ps.application.dto.SmartTaskDraftResponse;
 import com.ser.ps.application.dto.TaskSuggestionRequest;
 import com.ser.ps.application.dto.TaskSuggestionResponse;
+import java.util.Optional;
 
-public interface AiSuggestionService {
+public interface AiKanbanProvider {
 
-    TaskSuggestionResponse suggestTask(TaskSuggestionRequest request);
+    Optional<TaskSuggestionResponse> suggestTask(TaskSuggestionRequest request);
 
-    BoardSummaryResponse summarizeBoard(BoardResponse board);
+    Optional<BoardSummaryResponse> summarizeBoard(BoardResponse board);
 
-    SmartTaskDraftResponse draftTasks(BoardResponse board, SmartTaskDraftRequest request);
+    Optional<SmartTaskDraftResponse> draftTasks(BoardResponse board, SmartTaskDraftRequest request);
 
-    BoardChatResponse chat(BoardResponse board, BoardChatRequest request);
+    Optional<BoardChatResponse> chat(BoardResponse board, BoardChatRequest request);
 }
