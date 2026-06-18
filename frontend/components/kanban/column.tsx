@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   Typography,
   IconButton,
@@ -21,7 +21,7 @@ import {
   OutlinedInput,
   Autocomplete,
 } from "@mui/material"
-import { MoreHoriz, Add as AddIcon } from "@mui/icons-material"
+import { MoreHoriz, Add as AddIcon, DragIndicator, ChevronLeft, ChevronRight, Close } from "@mui/icons-material"
 import { DatePicker } from "@mui/x-date-pickers/DatePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
@@ -29,6 +29,7 @@ import { TaskCard } from "./task-card"
 import type { List, Task, Label, Assignee } from "@/types/kanban"
 import { useNotifications } from "@/contexts/notification-context"
 import { useAuth } from "@/contexts/auth-context"
+import { useProtectedImage } from "@/hooks/use-protected-image"
 
 interface ColumnProps {
   list: List
@@ -38,12 +39,18 @@ interface ColumnProps {
   onRename: (newTitle: string) => void
   onDelete: () => void
   onClearTasks: () => void
-  onAddTask: (task: Omit<Task, "id">) => void
+  onListDragStart: (e: React.DragEvent) => void
+  onListDrop: (e: React.DragEvent) => void
+  onAddTask: (task: Omit<Task, "id">) => Promise<Task | null> | void
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void
   onDeleteTask: (taskId: string) => void
   onDragOver: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent, listId: string) => void
   onTaskDragStart: (e: React.DragEvent, taskId: string, fromListId: string) => void
+  canManageLists?: boolean
+  onAddTaskAttachment?: (taskId: string, file: File) => void
+  onSetTaskAttachmentCover?: (taskId: string, attachmentId: string) => void
+  onDeleteTaskAttachment?: (taskId: string, attachmentId: string) => void
 }
 
 const REMINDER_OPTIONS = [
@@ -53,6 +60,24 @@ const REMINDER_OPTIONS = [
   { value: "1_hour", label: "1 hour before" },
 ]
 
+function AttachmentThumbnail({ url, name, sx }: { url: string; name: string; sx?: object }) {
+  const { token } = useAuth()
+  const src = useProtectedImage(url, token)
+
+  if (!src) {
+    return <Box sx={{ width: 96, height: 72, borderRadius: 1, bgcolor: "action.hover", ...sx }} />
+  }
+
+  return (
+    <Box
+      component="img"
+      src={src}
+      alt={name}
+      sx={{ width: 96, height: 72, objectFit: "cover", borderRadius: 1, border: "1px solid", borderColor: "divider", ...sx }}
+    />
+  )
+}
+
 export function Column({
   list,
   boardId,
@@ -61,12 +86,18 @@ export function Column({
   onRename,
   onDelete,
   onClearTasks,
+  onListDragStart,
+  onListDrop,
   onAddTask,
   onUpdateTask,
   onDeleteTask,
   onDragOver,
   onDrop,
   onTaskDragStart,
+  canManageLists = true,
+  onAddTaskAttachment,
+  onSetTaskAttachmentCover,
+  onDeleteTaskAttachment,
 }: ColumnProps) {
   const { addNotification } = useNotifications()
   const { currentUser } = useAuth()
@@ -82,6 +113,7 @@ export function Column({
   const [newTaskAssignee, setNewTaskAssignee] = useState<Assignee | null>(null)
   const [newTaskPriority, setNewTaskPriority] = useState<"high" | "medium" | "low">("medium")
   const [newTaskReminder, setNewTaskReminder] = useState<"1_day" | "2_hours" | "1_hour" | "none">("none")
+  const [newTaskImages, setNewTaskImages] = useState<File[]>([])
 
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [taskDetailsOpen, setTaskDetailsOpen] = useState(false)
@@ -92,6 +124,10 @@ export function Column({
   const [editedTaskAssignee, setEditedTaskAssignee] = useState<Assignee | null>(null)
   const [editedTaskPriority, setEditedTaskPriority] = useState<"high" | "medium" | "low">("medium")
   const [editedTaskReminder, setEditedTaskReminder] = useState<"1_day" | "2_hours" | "1_hour" | "none">("none")
+  const [attachmentMenuAnchor, setAttachmentMenuAnchor] = useState<null | HTMLElement>(null)
+  const [selectedAttachmentId, setSelectedAttachmentId] = useState<string | null>(null)
+  const [galleryOpen, setGalleryOpen] = useState(false)
+  const [galleryIndex, setGalleryIndex] = useState(0)
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget)
@@ -128,9 +164,9 @@ export function Column({
     setAddTaskDialogOpen(true)
   }
 
-  const handleConfirmAddTask = () => {
+  const handleConfirmAddTask = async () => {
     if (newTaskTitle.trim()) {
-      onAddTask({
+      const createdTask = await onAddTask({
         title: newTaskTitle.trim(),
         description: newTaskDescription.trim(),
         labels: newTaskLabels,
@@ -139,6 +175,12 @@ export function Column({
         assignees: newTaskAssignee ? [newTaskAssignee] : [],
         reminderBefore: newTaskReminder,
       })
+
+      if (createdTask) {
+        for (const file of newTaskImages) {
+          await onAddTaskAttachment?.(createdTask.id, file)
+        }
+      }
 
       if (newTaskAssignee && currentUser && newTaskAssignee.id !== currentUser.id) {
         addNotification({
@@ -158,6 +200,7 @@ export function Column({
       setNewTaskAssignee(null)
       setNewTaskPriority("medium")
       setNewTaskReminder("none")
+      setNewTaskImages([])
       setAddTaskDialogOpen(false)
     }
   }
@@ -172,6 +215,55 @@ export function Column({
     setEditedTaskPriority(task.priority)
     setEditedTaskReminder(task.reminderBefore || "none")
     setTaskDetailsOpen(true)
+  }
+
+  useEffect(() => {
+    if (!selectedTask) return
+    const freshTask = list.tasks.find((task) => task.id === selectedTask.id)
+    if (freshTask) {
+      setSelectedTask(freshTask)
+    }
+  }, [list.tasks, selectedTask])
+
+  const handleAddAttachment = (file: File | undefined) => {
+    if (!selectedTask || !file) return
+    onAddTaskAttachment?.(selectedTask.id, file)
+  }
+
+  const handleDeleteAttachment = (attachmentId: string) => {
+    if (!selectedTask) return
+    onDeleteTaskAttachment?.(selectedTask.id, attachmentId)
+  }
+
+  const handleAttachmentMenuOpen = (event: React.MouseEvent<HTMLElement>, attachmentId: string) => {
+    event.stopPropagation()
+    setAttachmentMenuAnchor(event.currentTarget)
+    setSelectedAttachmentId(attachmentId)
+  }
+
+  const handleAttachmentMenuClose = () => {
+    setAttachmentMenuAnchor(null)
+    setSelectedAttachmentId(null)
+  }
+
+  const handleSetCover = () => {
+    if (selectedTask && selectedAttachmentId) {
+      onSetTaskAttachmentCover?.(selectedTask.id, selectedAttachmentId)
+    }
+    handleAttachmentMenuClose()
+  }
+
+  const handleDeleteSelectedAttachment = () => {
+    if (selectedTask && selectedAttachmentId) {
+      handleDeleteAttachment(selectedAttachmentId)
+    }
+    handleAttachmentMenuClose()
+  }
+
+  const openGallery = (attachmentId: string) => {
+    const index = (selectedTask?.attachments || []).findIndex((attachment) => attachment.id === attachmentId)
+    setGalleryIndex(Math.max(0, index))
+    setGalleryOpen(true)
   }
 
   const handleSaveTaskDetails = () => {
@@ -208,6 +300,10 @@ export function Column({
     }
   }
 
+  const galleryAttachments = selectedTask?.attachments || []
+  const galleryAttachment = galleryAttachments[galleryIndex]
+  const selectedAttachment = galleryAttachments.find((attachment) => attachment.id === selectedAttachmentId)
+
   const handleDeleteTask = () => {
     if (selectedTask) {
       onDeleteTask(selectedTask.id)
@@ -232,23 +328,34 @@ export function Column({
         }}
       >
         {/* Column Header */}
-        <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.5 }}>
+        <Box
+          draggable={canManageLists}
+          onDragStart={onListDragStart}
+          onDragOver={onDragOver}
+          onDrop={onListDrop}
+          sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", px: 1.5, py: 1.5 }}
+        >
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {canManageLists && <DragIndicator sx={{ fontSize: 16, color: "text.secondary", cursor: "grab" }} />}
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
               {list.title}
             </Typography>
             <Chip label={list.tasks.length} size="small" sx={{ height: 20, minWidth: 20, fontSize: 12 }} />
           </Box>
-          <IconButton size="small" onClick={handleMenuOpen}>
-            <MoreHoriz fontSize="small" />
-          </IconButton>
-          <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
-            <MenuItem onClick={handleRename}>Rename</MenuItem>
-            <MenuItem onClick={handleClearTasks}>Clear all tasks</MenuItem>
-            <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
-              Delete
-            </MenuItem>
-          </Menu>
+          {canManageLists && (
+            <>
+              <IconButton size="small" onClick={handleMenuOpen}>
+                <MoreHoriz fontSize="small" />
+              </IconButton>
+              <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+                <MenuItem onClick={handleRename}>Rename</MenuItem>
+                <MenuItem onClick={handleClearTasks}>Clear all tasks</MenuItem>
+                <MenuItem onClick={handleDelete} sx={{ color: "error.main" }}>
+                  Delete
+                </MenuItem>
+              </Menu>
+            </>
+          )}
         </Box>
 
         {/* Task List */}
@@ -323,6 +430,39 @@ export function Column({
             onChange={(e) => setNewTaskDescription(e.target.value)}
             sx={{ mb: 2 }}
           />
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                Images
+              </Typography>
+              <Button component="label" size="small" variant="outlined">
+                Add Images
+                <input
+                  hidden
+                  multiple
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(event) => {
+                    const files = Array.from(event.target.files || []).filter((file) => file.type.startsWith("image/"))
+                    setNewTaskImages((prev) => [...prev, ...files])
+                    event.target.value = ""
+                  }}
+                />
+              </Button>
+            </Box>
+            {newTaskImages.length > 0 && (
+              <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+                {newTaskImages.map((file, index) => (
+                  <Chip
+                    key={`${file.name}-${index}`}
+                    label={file.name}
+                    onDelete={() => setNewTaskImages((prev) => prev.filter((_, fileIndex) => fileIndex !== index))}
+                    size="small"
+                  />
+                ))}
+              </Box>
+            )}
+          </Box>
           <DatePicker
             label="Due Date"
             value={newTaskDueDate}
@@ -424,6 +564,79 @@ export function Column({
             onChange={(e) => setEditedTaskDescription(e.target.value)}
             sx={{ mb: 2 }}
           />
+          <Box sx={{ mb: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 1 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                Images
+              </Typography>
+              <Button component="label" size="small" variant="outlined">
+                Upload
+                <input
+                  hidden
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={(event) => {
+                    handleAddAttachment(event.target.files?.[0])
+                    event.target.value = ""
+                  }}
+                />
+              </Button>
+            </Box>
+            <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
+              {galleryAttachments.map((attachment) => (
+                <Box key={attachment.id} sx={{ position: "relative" }}>
+                  <Box
+                    component="button"
+                    type="button"
+                    onClick={() => openGallery(attachment.id)}
+                    sx={{
+                      display: "block",
+                      p: 0,
+                      border: 0,
+                      bgcolor: "transparent",
+                      cursor: "pointer",
+                      lineHeight: 0,
+                    }}
+                  >
+                    <AttachmentThumbnail url={attachment.url} name={attachment.fileName} />
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={(event) => handleAttachmentMenuOpen(event, attachment.id)}
+                    sx={{
+                      position: "absolute",
+                      top: 2,
+                      right: 2,
+                      bgcolor: "background.paper",
+                      boxShadow: 1,
+                      "&:hover": { bgcolor: "background.paper" },
+                    }}
+                  >
+                    <MoreHoriz fontSize="small" />
+                  </IconButton>
+                  {attachment.cover && (
+                    <Chip
+                      label="Cover"
+                      size="small"
+                      sx={{
+                        position: "absolute",
+                        left: 4,
+                        bottom: 4,
+                        height: 20,
+                        bgcolor: "background.paper",
+                        fontWeight: 600,
+                      }}
+                    />
+                  )}
+                </Box>
+              ))}
+              {galleryAttachments.length === 0 && (
+                <Typography variant="body2" color="text.secondary">
+                  No images attached
+                </Typography>
+              )}
+            </Box>
+          </Box>
           <DatePicker
             label="Due Date"
             value={editedTaskDueDate}
@@ -505,6 +718,69 @@ export function Column({
             Save
           </Button>
         </DialogActions>
+      </Dialog>
+
+      <Menu anchorEl={attachmentMenuAnchor} open={Boolean(attachmentMenuAnchor)} onClose={handleAttachmentMenuClose}>
+        <MenuItem onClick={handleSetCover} disabled={selectedAttachment?.cover}>
+          Make cover photo
+        </MenuItem>
+        <MenuItem onClick={handleDeleteSelectedAttachment} sx={{ color: "error.main" }}>
+          Delete
+        </MenuItem>
+      </Menu>
+
+      <Dialog open={galleryOpen} onClose={() => setGalleryOpen(false)} maxWidth="md" fullWidth>
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ fontWeight: 700 }} noWrap>
+              {galleryAttachment?.fileName || "Image"}
+            </Typography>
+            {galleryAttachments.length > 0 && (
+              <Typography variant="caption" color="text.secondary">
+                {galleryIndex + 1} / {galleryAttachments.length}
+              </Typography>
+            )}
+          </Box>
+          <IconButton onClick={() => setGalleryOpen(false)}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent
+          sx={{
+            minHeight: { xs: 320, sm: 520 },
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 1,
+            bgcolor: "background.default",
+          }}
+        >
+          <IconButton
+            onClick={() => setGalleryIndex((index) => (index - 1 + galleryAttachments.length) % galleryAttachments.length)}
+            disabled={galleryAttachments.length <= 1}
+          >
+            <ChevronLeft />
+          </IconButton>
+          {galleryAttachment && (
+            <AttachmentThumbnail
+              url={galleryAttachment.url}
+              name={galleryAttachment.fileName}
+              sx={{
+                width: "100%",
+                maxWidth: 760,
+                height: { xs: 280, sm: 480 },
+                objectFit: "contain",
+                bgcolor: "background.paper",
+              }}
+            />
+          )}
+          <IconButton
+            onClick={() => setGalleryIndex((index) => (index + 1) % galleryAttachments.length)}
+            disabled={galleryAttachments.length <= 1}
+          >
+            <ChevronRight />
+          </IconButton>
+        </DialogContent>
       </Dialog>
     </LocalizationProvider>
   )

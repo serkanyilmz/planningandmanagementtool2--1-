@@ -10,6 +10,7 @@ public record TaskResponse(
         String priority,
         String dueDate,
         List<AssigneeResponse> assignees,
-        String reminderBefore
+        String reminderBefore,
+        List<TaskAttachmentResponse> attachments
 ) {
 }

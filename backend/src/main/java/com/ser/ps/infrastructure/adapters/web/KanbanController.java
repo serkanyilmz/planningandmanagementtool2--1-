@@ -8,14 +8,19 @@ import com.ser.ps.application.dto.CreateLabelRequest;
 import com.ser.ps.application.dto.CreateListRequest;
 import com.ser.ps.application.dto.CreateTaskRequest;
 import com.ser.ps.application.dto.MoveTaskRequest;
+import com.ser.ps.application.dto.ReorderListsRequest;
+import com.ser.ps.application.dto.UpdateBoardMemberRoleRequest;
 import com.ser.ps.application.dto.UpdateBoardRequest;
 import com.ser.ps.application.dto.UpdateLabelRequest;
 import com.ser.ps.application.dto.UpdateListRequest;
 import com.ser.ps.application.dto.UpdateTaskRequest;
+import com.ser.ps.application.dto.UploadedImage;
 import com.ser.ps.application.ports.in.KanbanService;
+import java.io.IOException;
 import java.security.Principal;
 import java.util.List;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,8 +30,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api")
@@ -86,6 +93,29 @@ public class KanbanController {
         return board;
     }
 
+    @PatchMapping("/boards/{boardId}/members/{userId}/role")
+    public BoardResponse updateMemberRole(
+            @PathVariable Long boardId,
+            @PathVariable Long userId,
+            @RequestBody UpdateBoardMemberRoleRequest request,
+            Principal principal
+    ) {
+        BoardResponse board = kanbanService.updateMemberRole(boardId, userId, request, principal.getName());
+        publish("BOARD_MEMBER_ROLE_UPDATED", board);
+        return board;
+    }
+
+    @DeleteMapping("/boards/{boardId}/members/{userId}")
+    public BoardResponse removeMember(
+            @PathVariable Long boardId,
+            @PathVariable Long userId,
+            Principal principal
+    ) {
+        BoardResponse board = kanbanService.removeMember(boardId, userId, principal.getName());
+        publish("BOARD_MEMBER_REMOVED", board);
+        return board;
+    }
+
     @PostMapping("/boards/{boardId}/lists")
     @ResponseStatus(HttpStatus.CREATED)
     public BoardResponse addList(
@@ -95,6 +125,17 @@ public class KanbanController {
     ) {
         BoardResponse board = kanbanService.addList(boardId, request, principal.getName());
         publish("LIST_CREATED", board);
+        return board;
+    }
+
+    @PatchMapping("/boards/{boardId}/lists/reorder")
+    public BoardResponse reorderLists(
+            @PathVariable Long boardId,
+            @RequestBody ReorderListsRequest request,
+            Principal principal
+    ) {
+        BoardResponse board = kanbanService.reorderLists(boardId, request, principal.getName());
+        publish("LISTS_REORDERED", board);
         return board;
     }
 
@@ -164,6 +205,39 @@ public class KanbanController {
         return board;
     }
 
+    @PostMapping(value = "/tasks/{taskId}/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public BoardResponse addTaskAttachment(
+            @PathVariable Long taskId,
+            @RequestPart("file") MultipartFile file,
+            Principal principal
+    ) throws IOException {
+        BoardResponse board = kanbanService.addTaskAttachment(taskId, toUploadedImage(file), principal.getName());
+        publish("TASK_ATTACHMENT_ADDED", board);
+        return board;
+    }
+
+    @PatchMapping("/tasks/{taskId}/attachments/{attachmentId}/cover")
+    public BoardResponse setTaskAttachmentCover(
+            @PathVariable Long taskId,
+            @PathVariable Long attachmentId,
+            Principal principal
+    ) {
+        BoardResponse board = kanbanService.setTaskAttachmentCover(taskId, attachmentId, principal.getName());
+        publish("TASK_ATTACHMENT_COVER_UPDATED", board);
+        return board;
+    }
+
+    @DeleteMapping("/tasks/{taskId}/attachments/{attachmentId}")
+    public BoardResponse deleteTaskAttachment(
+            @PathVariable Long taskId,
+            @PathVariable Long attachmentId,
+            Principal principal
+    ) {
+        BoardResponse board = kanbanService.deleteTaskAttachment(taskId, attachmentId, principal.getName());
+        publish("TASK_ATTACHMENT_DELETED", board);
+        return board;
+    }
+
     @PostMapping("/boards/{boardId}/labels")
     @ResponseStatus(HttpStatus.CREATED)
     public BoardResponse addLabel(
@@ -196,5 +270,14 @@ public class KanbanController {
 
     private void publish(String type, BoardResponse board) {
         messagingTemplate.convertAndSend("/topic/boards/" + board.id(), new BoardEventResponse(type, board));
+    }
+
+    private UploadedImage toUploadedImage(MultipartFile file) throws IOException {
+        return new UploadedImage(
+                file.getOriginalFilename(),
+                file.getContentType(),
+                file.getSize(),
+                file.getBytes()
+        );
     }
 }

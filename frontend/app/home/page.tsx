@@ -23,7 +23,7 @@ export default function HomePage() {
   const { boards, getBoardsForUser } = useBoards()
   const { filters, hasActiveFilters } = useFilters()
 
-  const userBoards = currentUser ? getBoardsForUser(currentUser.id) : boards
+  const userBoards = currentUser ? getBoardsForUser(currentUser.id) : []
 
   const showTaskView = filters.myTasksOnly || filters.dueDateSort !== "none" || filters.keyword.trim() !== ""
 

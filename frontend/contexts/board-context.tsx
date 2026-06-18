@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import { Client } from "@stomp/stompjs"
-import type { BoardData, Task, List, Label } from "@/types/kanban"
+import type { BoardData, Task, List, Label, BoardMember } from "@/types/kanban"
 import { useAuth } from "@/contexts/auth-context"
 import { apiRequest } from "@/lib/api-client"
 
@@ -12,6 +12,8 @@ export interface Board {
   description: string
   color: string
   memberIds: string[]
+  members?: BoardMember[]
+  currentUserRole?: "admin" | "member"
   data: BoardData
   labels: Label[]
 }
@@ -25,16 +27,21 @@ interface BoardContextType {
   updateBoard: (id: string, updates: Partial<Board>) => Promise<void>
   deleteBoard: (id: string) => Promise<void>
   addMemberToBoard: (boardId: string, userId: string) => Promise<void>
-  removeMemberFromBoard: (boardId: string, userId: string) => void
+  updateBoardMemberRole: (boardId: string, userId: string, role: "admin" | "member") => Promise<void>
+  removeMemberFromBoard: (boardId: string, userId: string) => Promise<void>
   getBoardsForUser: (userId: string) => Board[]
   addList: (boardId: string, title: string) => Promise<void>
+  reorderLists: (boardId: string, listIds: string[]) => Promise<void>
   renameList: (boardId: string, listId: string, newTitle: string) => Promise<void>
   deleteList: (boardId: string, listId: string) => Promise<void>
   clearListTasks: (boardId: string, listId: string) => Promise<void>
-  addTask: (boardId: string, listId: string, task: Omit<Task, "id">) => Promise<void>
+  addTask: (boardId: string, listId: string, task: Omit<Task, "id">) => Promise<Task | null>
   updateTask: (boardId: string, listId: string, taskId: string, updates: Partial<Task>) => Promise<void>
   deleteTask: (boardId: string, listId: string, taskId: string) => Promise<void>
   moveTask: (boardId: string, fromListId: string, toListId: string, taskId: string) => Promise<void>
+  addTaskAttachment: (boardId: string, taskId: string, file: File) => Promise<void>
+  setTaskAttachmentCover: (boardId: string, taskId: string, attachmentId: string) => Promise<void>
+  deleteTaskAttachment: (boardId: string, taskId: string, attachmentId: string) => Promise<void>
   addLabelToBoard: (boardId: string, name: string, color: string) => Promise<Label | null>
   updateBoardLabel: (boardId: string, labelId: string, updates: Partial<Label>) => Promise<void>
   deleteBoardLabel: (boardId: string, labelId: string) => Promise<void>
@@ -42,6 +49,19 @@ interface BoardContextType {
 
 const BoardContext = createContext<BoardContextType | undefined>(undefined)
 const WS_BASE_URL = (process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080/ws").replace(/\/$/, "")
+
+function isBoard(value: unknown): value is Board {
+  const board = value as Partial<Board> | null
+  return Boolean(
+    board &&
+      typeof board.id === "string" &&
+      typeof board.title === "string" &&
+      board.data &&
+      Array.isArray(board.data.lists) &&
+      Array.isArray(board.labels) &&
+      Array.isArray(board.memberIds),
+  )
+}
 
 function taskPayload(task: Partial<Task>) {
   return {
@@ -62,6 +82,10 @@ export function BoardProvider({ children }: { children: ReactNode }) {
   const boardIds = boards.map((board) => board.id).sort().join(",")
 
   const replaceBoard = useCallback((updatedBoard: Board) => {
+    if (!isBoard(updatedBoard)) {
+      console.warn("Ignoring invalid board payload", updatedBoard)
+      return
+    }
     setBoards((prev) => {
       const exists = prev.some((board) => board.id === updatedBoard.id)
       if (!exists) {
@@ -80,7 +104,7 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     try {
       const loadedBoards = await apiRequest<Board[]>("/api/boards", token)
-      setBoards(loadedBoards)
+      setBoards(loadedBoards.filter(isBoard))
     } finally {
       setIsLoading(false)
     }
@@ -175,9 +199,26 @@ export function BoardProvider({ children }: { children: ReactNode }) {
     [token, replaceBoard],
   )
 
-  const removeMemberFromBoard = useCallback(() => {
-    // Member removal is intentionally not exposed by the current backend MVP.
-  }, [])
+  const updateBoardMemberRole = useCallback(
+    async (boardId: string, userId: string, role: "admin" | "member") => {
+      if (!token) return
+      const board = await apiRequest<Board>(`/api/boards/${boardId}/members/${userId}/role`, token, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      })
+      replaceBoard(board)
+    },
+    [token, replaceBoard],
+  )
+
+  const removeMemberFromBoard = useCallback(
+    async (boardId: string, userId: string) => {
+      if (!token) return
+      const board = await apiRequest<Board>(`/api/boards/${boardId}/members/${userId}`, token, { method: "DELETE" })
+      replaceBoard(board)
+    },
+    [token, replaceBoard],
+  )
 
   const getBoardsForUser = useCallback(
     (userId: string) => {
@@ -196,6 +237,34 @@ export function BoardProvider({ children }: { children: ReactNode }) {
       replaceBoard(board)
     },
     [token, replaceBoard],
+  )
+
+  const reorderLists = useCallback(
+    async (boardId: string, listIds: string[]) => {
+      if (!token) return
+      const currentBoard = boards.find((board) => board.id === boardId)
+      if (currentBoard) {
+        const byId = new Map(currentBoard.data.lists.map((list) => [list.id, list]))
+        setBoards((prev) =>
+          prev.map((board) =>
+            board.id === boardId ? { ...board, data: { lists: listIds.map((listId) => byId.get(listId)).filter(Boolean) as List[] } } : board,
+          ),
+        )
+      }
+      try {
+        const board = await apiRequest<Board>(`/api/boards/${boardId}/lists/reorder`, token, {
+          method: "PATCH",
+          body: JSON.stringify({ listIds: listIds.map((id) => Number(id)) }),
+        })
+        replaceBoard(board)
+      } catch (error) {
+        if (currentBoard) {
+          replaceBoard(currentBoard)
+        }
+        throw error
+      }
+    },
+    [token, boards, replaceBoard],
   )
 
   const renameList = useCallback(
@@ -230,12 +299,14 @@ export function BoardProvider({ children }: { children: ReactNode }) {
 
   const addTask = useCallback(
     async (_boardId: string, listId: string, task: Omit<Task, "id">) => {
-      if (!token) return
+      if (!token) return null
       const board = await apiRequest<Board>(`/api/lists/${listId}/tasks`, token, {
         method: "POST",
         body: JSON.stringify(taskPayload(task)),
       })
       replaceBoard(board)
+      const targetList = board.data.lists.find((list) => list.id === listId)
+      return targetList?.tasks[targetList.tasks.length - 1] || null
     },
     [token, replaceBoard],
   )
@@ -272,6 +343,38 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         method: "PATCH",
         body: JSON.stringify({ targetListId: Number(toListId) }),
       })
+      replaceBoard(board)
+    },
+    [token, replaceBoard],
+  )
+
+  const addTaskAttachment = useCallback(
+    async (_boardId: string, taskId: string, file: File) => {
+      if (!token) return
+      const formData = new FormData()
+      formData.append("file", file)
+      const board = await apiRequest<Board>(`/api/tasks/${taskId}/attachments`, token, {
+        method: "POST",
+        body: formData,
+      })
+      replaceBoard(board)
+    },
+    [token, replaceBoard],
+  )
+
+  const setTaskAttachmentCover = useCallback(
+    async (_boardId: string, taskId: string, attachmentId: string) => {
+      if (!token) return
+      const board = await apiRequest<Board>(`/api/tasks/${taskId}/attachments/${attachmentId}/cover`, token, { method: "PATCH" })
+      replaceBoard(board)
+    },
+    [token, replaceBoard],
+  )
+
+  const deleteTaskAttachment = useCallback(
+    async (_boardId: string, taskId: string, attachmentId: string) => {
+      if (!token) return
+      const board = await apiRequest<Board>(`/api/tasks/${taskId}/attachments/${attachmentId}`, token, { method: "DELETE" })
       replaceBoard(board)
     },
     [token, replaceBoard],
@@ -322,9 +425,11 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         updateBoard,
         deleteBoard,
         addMemberToBoard,
+        updateBoardMemberRole,
         removeMemberFromBoard,
         getBoardsForUser,
         addList,
+        reorderLists,
         renameList,
         deleteList,
         clearListTasks,
@@ -332,6 +437,9 @@ export function BoardProvider({ children }: { children: ReactNode }) {
         updateTask,
         deleteTask,
         moveTask,
+        addTaskAttachment,
+        setTaskAttachmentCover,
+        deleteTaskAttachment,
         addLabelToBoard,
         updateBoardLabel,
         deleteBoardLabel,

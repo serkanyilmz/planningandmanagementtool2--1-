@@ -35,6 +35,7 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { useAuth } from "@/contexts/auth-context"
 import { useBoards } from "@/contexts/board-context"
 import { EditBoardDialog } from "@/components/edit-board-dialog"
+import { useProtectedImage } from "@/hooks/use-protected-image"
 
 interface NavItem {
   icon: React.ElementType
@@ -58,10 +59,11 @@ interface SidebarContentProps {
 
 function SidebarContent({ collapsed, onToggle, onNavigate }: SidebarContentProps) {
   const router = useRouter()
-  const { currentUser, logout } = useAuth()
-  const { boards, getBoardsForUser, updateBoard, deleteBoard } = useBoards()
+  const { currentUser, logout, token } = useAuth()
+  const { getBoardsForUser, updateBoard, deleteBoard } = useBoards()
+  const profileImageSrc = useProtectedImage(currentUser?.profileImageUrl, token)
 
-  const userBoards = currentUser ? getBoardsForUser(currentUser.id) : boards
+  const userBoards = currentUser ? getBoardsForUser(currentUser.id) : []
 
   const [boardMenuAnchor, setBoardMenuAnchor] = useState<null | HTMLElement>(null)
   const [selectedBoard, setSelectedBoard] = useState<{ id: string; title: string; color: string } | null>(null)
@@ -85,6 +87,11 @@ function SidebarContent({ collapsed, onToggle, onNavigate }: SidebarContentProps
   const handleLogout = () => {
     logout()
     router.push("/login")
+  }
+
+  const handleProfileClick = () => {
+    router.push("/settings")
+    onNavigate?.()
   }
 
   const getUserInitials = () => {
@@ -295,29 +302,40 @@ function SidebarContent({ collapsed, onToggle, onNavigate }: SidebarContentProps
 
         <Box sx={{ borderTop: "1px solid rgba(255,255,255,0.1)", p: 1.5 }}>
           <Box
+            onClick={handleProfileClick}
             sx={{
               display: "flex",
               alignItems: "center",
               gap: 1.5,
               p: 1,
               borderRadius: 1,
+              cursor: "pointer",
               "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
               justifyContent: collapsed ? "center" : "flex-start",
             }}
           >
-            <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main", fontSize: 12 }}>{getUserInitials()}</Avatar>
+            <Avatar src={profileImageSrc || undefined} sx={{ width: 32, height: 32, bgcolor: "primary.main", fontSize: 12 }}>
+              {getUserInitials()}
+            </Avatar>
             {!collapsed && (
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {currentUser?.name || "Guest User"}
+                  {currentUser?.name || ""}
                 </Typography>
-                <Typography variant="caption" sx={{ color: "#64748b" }}>
-                  {currentUser?.email || "Not signed in"}
+                <Typography variant="caption" sx={{ color: "#cbd5e1" }}>
+                  {currentUser?.email || ""}
                 </Typography>
               </Box>
             )}
             {!collapsed && (
-              <IconButton size="small" onClick={handleLogout} sx={{ color: "#64748b" }}>
+              <IconButton
+                size="small"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  handleLogout()
+                }}
+                sx={{ color: "#cbd5e1" }}
+              >
                 <LogoutIcon fontSize="small" />
               </IconButton>
             )}
